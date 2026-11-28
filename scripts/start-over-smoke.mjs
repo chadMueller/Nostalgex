@@ -58,6 +58,7 @@ function startOver(src, { signOutThrows = false } = {}) {
     sleepTimer: { cancel() {} }, closePlaybackInfo() {}, stopVideo() {}, resetConnectScreen() {}, endScanWatch() {}, supersedeLibraryLoads() {},
     updateConfigPlexStatus() {}, hideGuide() {},
     clearLibraryCache() { calls.push("clearLibraryCache"); local.removeItem("plex90_library_cache"); },
+    setLibraryPickOwed(on) { calls.push(`setLibraryPickOwed ${on}`); },   // signOut clears the library choice a sign-in owes
     COLLECTION_SCAN_KEY: "plex90_collections", CHANNELS: [{ itemPool: [1], schedule: [1] }],
     libraryExtrasGeneration: 0,
   };
@@ -79,6 +80,7 @@ check("plex-tuner.html has startOverFromLoading and signOut", r !== null);
 if (r) {
   check("the saved login is gone", !r.local.includes("plex90_saved_auth"), r.local.join(","));
   check("the library cache is gone", r.calls.includes("clearLibraryCache") && !r.local.includes("plex90_library_cache"));
+  check("the library choice a sign-in owes is cleared", r.calls.includes("setLibraryPickOwed false"), r.calls.join(" > "));
   check("unrelated storage stays", r.local.includes("other"));
   check("the session's login is gone", r.session.length === 0, r.session.join(","));
   check("then it leaves for web-tuner.html, last", r.calls.at(-1) === "replace web-tuner.html", r.calls.join(" > "));

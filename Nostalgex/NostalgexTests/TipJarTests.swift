@@ -179,4 +179,35 @@ final class TipJarTests: XCTestCase {
         XCTAssertFalse(ledger.contains(0))
         XCTAssertTrue(ledger.contains(UInt64(TipThankLedger.cap + 24)))
     }
+
+    // MARK: - Analytics
+
+    /// Pins the three tip signals: their names and the one parameter. A new key means a
+    /// new look at the privacy label, so adding one must fail here first.
+    func testTipSignalsCarryTheTierAndNothingElse() {
+        let tiers: [(TipProduct, String)] = [(.popcorn, "popcorn"), (.tvDinner, "tv_dinner"), (.pizzaNight, "pizza_night")]
+        XCTAssertEqual(tiers.count, TipProduct.allCases.count)
+        for (tip, wire) in tiers {
+            let tier = tip.analyticsTier
+            let events: [(AnalyticsEvent, String)] = [
+                (.tipStarted(tier: tier), "tip.started"),
+                (.tipCompleted(tier: tier), "tip.completed"),
+                (.tipFailed(tier: tier), "tip.failed"),
+            ]
+            for (event, name) in events {
+                XCTAssertEqual(event.name, name)
+                XCTAssertEqual(event.parameters, ["tier": wire], name)
+                XCTAssertNil(event.floatValue, name)
+            }
+        }
+    }
+
+    func testOnlyAThankYouOrAFailureIsCounted() {
+        XCTAssertEqual(TipJarLogic.analyticsEvent(for: .thanks, tip: .popcorn)?.name, "tip.completed")
+        XCTAssertEqual(TipJarLogic.analyticsEvent(for: .failed, tip: .pizzaNight)?.name, "tip.failed")
+        XCTAssertEqual(TipJarLogic.analyticsEvent(for: .failed, tip: .pizzaNight)?.parameters, ["tier": "pizza_night"])
+        XCTAssertNil(TipJarLogic.analyticsEvent(for: .none, tip: .popcorn), "a cancel or a repeat sends nothing")
+        XCTAssertNil(TipJarLogic.analyticsEvent(for: .pending, tip: .popcorn), "waiting for approval sends nothing")
+        XCTAssertNil(TipJarLogic.analyticsEvent(for: .thanks, tip: nil), "an unknown product sends nothing")
+    }
 }

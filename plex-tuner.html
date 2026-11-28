@@ -4326,6 +4326,13 @@
         </div>
         <button class="plex-btn plex-btn--toggle" id="cfg-watershed-toggle" type="button" style="font-size: var(--fs-cap); padding: 12px 22px;" onclick="toggleWatershed()" aria-label="Watershed" aria-pressed="false">OFF</button>
       </div>
+      <div class="cfg-row" id="chan-episode-order-row">
+        <div>
+          <div class="cfg-row-title">EPISODE ORDER</div>
+          <div class="cfg-row-desc" id="cfg-episode-order-desc">Two episodes of a show back to back, in order. Movie channels are not affected.</div>
+        </div>
+        <button class="plex-btn" id="cfg-episode-order-btn" type="button" style="font-size: var(--fs-cap); padding: 12px 22px;" onclick="cycleEpisodeOrder()" aria-label="Episode order" aria-describedby="cfg-episode-order-desc">CLASSIC RERUNS</button>
+      </div>
 </div>
 
       <div id="channels-page-bundles" data-page="bundles" hidden>
@@ -5239,8 +5246,10 @@
       wxEnsureForecast(false);
     }
     // The radar frames load from the TODAY screen on, so they are there when the radar comes up.
-    if (WXE.screenAt(now).index >= 1) wxEnsureRadar();
-    WX.timer = setTimeout(wxTick, WXS.nextDelay(now));
+    // A place with no radar coverage has no radar screen in its loop, so there is nothing to fetch.
+    const withRadar = WXE.hasRadar(WX.place);
+    if (withRadar && WXE.screenAt(now, withRadar).index >= 1) wxEnsureRadar();
+    WX.timer = setTimeout(wxTick, WXS.nextDelay(now, withRadar));
   }
   async function wxLoadFonts() {
     if (WX.fonts) return;
@@ -5304,7 +5313,7 @@
     ch._live = null;
     ch._guide = null;
     ch._manifestBlocks = null;
-    ch.schedule = [{ ...WXE.guideItem(wxPlaceTitle(), summary), progress: 100, position: '', total: '' }];
+    ch.schedule = [{ ...WXE.guideItem(wxPlaceTitle(), summary, WXE.hasRadar(WX.place)), progress: 100, position: '', total: '' }];
   }
   /** What the guide's bar says. */
   function wxGuideLabel() { return WXE.guideBarText(WX.model, wxUnits()); }
@@ -5314,8 +5323,11 @@
     if (!WX.index) {
       WX.index = WXE.createPlaceIndex({
         load: async (path) => {
+          // A 404 is the answer "no such file" and is remembered; any other failure throws, is not remembered and is asked again.
           const r = await fetch(`weather/${path}`);
-          return r.ok ? r.json() : null;
+          if (r.ok) return r.json();
+          if (r.status === 404) return null;
+          throw new Error(`weather/${path}: ${r.status}`);
         },
       });
     }
@@ -5386,7 +5398,8 @@
       document.getElementById('wx-change-btn').focus();
     } else if (e.key === 'ArrowDown') {
       const first = document.querySelector('#wx-results .wx-result');
-      if (first) { e.preventDefault(); first.focus(); }
+      // Stop here: the page's own Down handler would otherwise step on from the first match to the second in the same press.
+      if (first) { e.preventDefault(); e.stopPropagation(); first.focus(); }
     }
   }
   function wxPickPlace(i) {
@@ -6069,9 +6082,34 @@
   // picker is offered, as on the Apple TV. A reload, a saved login coming back and a rescan are not sign-ins.
   let signInPending = false;
   const LIBRARY_PICK_SEEN_KEY = 'nostalgex_library_selection_seen';
+  // True from the moment a sign-in is saved until the viewer has made, or never needed, the library choice (the Apple
+  // TV's LibrarySectionSelectionStore.pickOwed). The saved login is written before CHOOSE YOUR LIBRARIES is shown and
+  // the screen itself lives only in this page, so a new browser session (a closed tab, a TV browser relaunch, a Docker
+  // page opened again) used to come back to a scan of every library. Set at a sign-in, cleared by CONTINUE, by a
+  // sign-in with nothing to choose and by sign-out.
+  const LIBRARY_PICK_OWED_KEY = 'nostalgex_library_pick_owed';
+  function libraryPickOwed() {
+    try { return localStorage.getItem(LIBRARY_PICK_OWED_KEY) === '1'; } catch (e) { return false; }
+  }
+  function setLibraryPickOwed(on) {
+    try { if (on) lsSet(LIBRARY_PICK_OWED_KEY, '1'); else localStorage.removeItem(LIBRARY_PICK_OWED_KEY); } catch (e) { /* the picker is still offered by signInPending */ }
+  }
+  // This launch found the choice owed and is asking again (not a sign-in made on this visit).
+  let libraryPickResuming = false;
   function beginSignInChoices() {
     try { globalThis.NostalgexLibrarySelection.resetForSignIn(); } catch (e) { /* the choices stay as they were */ }
     try { localStorage.removeItem(LIBRARY_PICK_SEEN_KEY); } catch (e) { /* the picker is offered by signInPending anyway */ }
+    setLibraryPickOwed(true);
+    libraryPickResuming = false;
+    libraryPickAllowed = true;
+    signInPending = true;
+  }
+  // A launch that finds the choice owed asks again. The sign-in already started the choices again, so they are not
+  // reset here: a relaunch that could not read the libraries keeps the flag, and a library switched off in Settings
+  // after it must stay off at the next launch.
+  function resumeLibraryPick() {
+    try { localStorage.removeItem(LIBRARY_PICK_SEEN_KEY); } catch (e) { /* the picker is offered by signInPending anyway */ }
+    libraryPickResuming = true;
     libraryPickAllowed = true;
     signInPending = true;
   }
@@ -6204,6 +6242,7 @@
     updateRetroControls();
     updateSyncActivityControls();
     updateWatershedControls();
+    updateEpisodeOrderControls();
     updateOpenLastChannelControls();
 
     // Touch controls drawer: the button, the close box, and the scrim.
@@ -6282,7 +6321,14 @@
       if (promoType === 'email') { window.__openPromoModal && window.__openPromoModal(); return; }
       if (promoType === 'coffee') { window.open('https://buymeacoffee.com/chadmueller', '_blank', 'noopener'); return; }
       const channelId = parseInt(row.dataset.channelId);
-      if (channelId) tuneFromGuide(channelId);
+      if (channelId) {
+        // A click or a tap is a press on that row: the cursor, the cyan highlight and the info panel go to it, as Down then Enter
+        // would. Without this they stayed on the row the cursor was on before (after a bundle stripe select, the bundle's first channel).
+        const idx = getEnabledChannels().findIndex(c => c.id === channelId);
+        if (idx >= 0) { guideFocusIndex = idx; guidePromoKey = null; guideStripeMode = false; guideStripeGroup = null; guideStripeJumped = false; }
+        tuneFromGuide(channelId);
+        updateGuideFocus();
+      }
     });
 
     // Wire up config channel row clicks
@@ -6517,6 +6563,44 @@
   // once (the Apple TV registers AppState.channels the same way). A cached older engine
   // script has no setLineup: it packs each channel alone, as before, until it reloads.
   if (typeof NostalgexDailyManifest.setLineup === 'function') NostalgexDailyManifest.setLineup(guideLineup);
+
+  // ── EPISODE ORDER (I-103): one setting for every channel's shows, in CHANNELS & BUNDLES (the Apple TV's EpisodeOrder) ──
+  // CLASSIC RERUNS (the default) airs two consecutive episodes of a show back to back, from a random spot in the series.
+  // SHUFFLE airs one at a time, picked at random. Movies are never affected. The engine (scripts/nostalgex-daily-manifest.js,
+  // the same file the Apple TV and Roku port) holds the order; this page saves the choice, hands it over at load and on
+  // every change, and builds the schedules again. The default is saved as no key, as the Apple TV does.
+  const EPISODE_ORDER_KEY = 'nostalgex_episode_order';
+  const EPISODE_ORDERS = {
+    classic: { title: 'CLASSIC RERUNS', text: 'Two episodes of a show back to back, in order. Movie channels are not affected.' },
+    shuffle: { title: 'SHUFFLE', text: 'One episode at a time, picked at random. Movie channels are not affected.' },
+  };
+  function savedEpisodeOrder() {
+    try { return localStorage.getItem(EPISODE_ORDER_KEY) === 'shuffle' ? 'shuffle' : 'classic'; } catch (e) { return 'classic'; }
+  }
+  // A cached older engine script has no setEpisodeOrder: it airs the way it always did until it reloads.
+  function applyEpisodeOrder() {
+    if (typeof NostalgexDailyManifest.setEpisodeOrder === 'function') NostalgexDailyManifest.setEpisodeOrder(savedEpisodeOrder());
+  }
+  applyEpisodeOrder();
+  /** The button and the line under the row show what the engine will read, so a write that failed shows as before. */
+  function updateEpisodeOrderControls() {
+    const order = EPISODE_ORDERS[savedEpisodeOrder()];
+    const button = document.getElementById('cfg-episode-order-btn');
+    const desc = document.getElementById('cfg-episode-order-desc');
+    if (button) button.textContent = order.title;
+    if (desc) desc.textContent = order.text;
+  }
+  function cycleEpisodeOrder() {
+    const next = savedEpisodeOrder() === 'classic' ? 'shuffle' : 'classic';
+    let saved = true;
+    if (next === 'classic') { try { localStorage.removeItem(EPISODE_ORDER_KEY); } catch (e) { saved = false; } }
+    else saved = lsSet(EPISODE_ORDER_KEY, next);
+    updateEpisodeOrderControls();
+    if (!saved) return;   // the engine reads what was saved, so a choice that did not save changes nothing
+    applyEpisodeOrder();
+    rebuildAllSchedules();
+    renderActiveGuide();
+  }
 
   /**
    * TunerView.buildAllSchedules: every channel at one instant, then one title on two
@@ -10468,7 +10552,9 @@
     const LL = globalThis.NostalgexLibraryLoad;
     const signedIn = signInPending;
     signInPending = false;
-    if (!libraryPickAllowed || !LL || !(signedIn || (LL.isFirstLibraryLoad() && localStorage.getItem(LIBRARY_PICK_SEEN_KEY) !== '1'))) return 'skip';
+    const resuming = libraryPickResuming;
+    libraryPickResuming = false;
+    if (!LL || !((libraryPickAllowed && (signedIn || (LL.isFirstLibraryLoad() && localStorage.getItem(LIBRARY_PICK_SEEN_KEY) !== '1'))) || libraryPickOwed())) return 'skip';
     // While the list loads, the same left-hand copy shows with one quiet line on the right.
     const picker = document.getElementById('library-picker');
     document.getElementById('plex-connect').style.display = '';
@@ -10480,12 +10566,30 @@
     const copy = document.getElementById('library-copy');
     if (copy) copy.textContent = `Pick which of your ${backendDisplayName()} libraries Nostalgex should build channels from. A library you leave off is never scanned. You can change this later in Settings.`;
     let sections;
-    try { sections = await listLibrarySections(); } catch (err) { console.warn('[Nostalgex] Library list failed, scanning everything:', err); picker.classList.remove('active'); return 'skip'; }
+    try {
+      // A launch that found the choice owed waits only so long on a server that does not answer: the scan after it has
+      // the STOP WAITING and START OVER the picker's one quiet line does not.
+      sections = resuming
+        ? await Promise.race([listLibrarySections(), new Promise((_, reject) => setTimeout(() => reject(new Error('the library list did not answer')), globalThis.NX_LIBRARY_RESUME_READ_MS || 15000))])
+        : await listLibrarySections();
+    } catch (err) {
+      console.warn('[Nostalgex] Library list failed, scanning everything:', err);
+      // A relaunch that could not read the libraries keeps the choice owed for the next one.
+      if (!resuming) setLibraryPickOwed(false);
+      picker.classList.remove('active');
+      return 'skip';
+    }
     knownLibrarySections = sections;
-    if (!globalThis.NostalgexLibraryPicker.offersPicker(sections)) { picker.classList.remove('active'); return 'skip'; }
+    if (!globalThis.NostalgexLibraryPicker.offersPicker(sections)) {
+      // Nothing to choose clears it, unless a relaunch read no libraries at all.
+      if (sections.length > 0 || !resuming) setLibraryPickOwed(false);
+      picker.classList.remove('active');
+      return 'skip';
+    }
     const canGoBack = !isMediaBrowserBackend(mediaBackend) && discoveredServers.length > 1;
     const how = await showLibrarySelection(sections, canGoBack);
     if (how === 'back') { document.getElementById('library-picker').classList.remove('active'); showServerPicker(); return 'back'; }
+    setLibraryPickOwed(false);
     lsSet(LIBRARY_PICK_SEEN_KEY, '1');
     return 'continue';
   }
@@ -10537,6 +10641,7 @@
     const wasOn = librarySectionOn(sec);
     if (wasOn && knownLibrarySections.filter(librarySectionOn).length <= 1) return;
     if (!LSEL.setSectionOn(sec, !wasOn)) return;
+    setLibraryPickOwed(false);   // a choice made in Settings is the choice: nothing is owed at the next launch
     clearLibraryCache();
     renderLibraryRows(LSEL.sectionId(sec.serverId, sec.key));
     rescanLibrary({ cause: 'switch' });
@@ -10747,6 +10852,7 @@
     if (subSel) subSel.value = subtitleLanguage;
     updateAutoSubsControls();
     updateWatershedControls();
+    updateEpisodeOrderControls();
     updateOpenLastChannelControls();
   }
 
@@ -11268,6 +11374,7 @@
     for (const k of ['plex90_token', 'plex90_server_url', 'plex90_server_name', 'plex90_user_token',
       'plex90_selected_servers', 'plex90_backend', 'plex90_jellyfin_user_id']) sessionStorage.removeItem(k);
     try { localStorage.removeItem('plex90_saved_auth'); } catch (e) {}
+    setLibraryPickOwed(false);
     // The cached library belongs to credentials that no longer work, and the
     // cache is consulted before the connect screen, so leaving it would build
     // channels around dead tokens instead of asking the user to sign in.
@@ -11314,7 +11421,10 @@
     const storedName = sessionStorage.getItem('plex90_server_name');
     const storedUserToken = sessionStorage.getItem('plex90_user_token');
 
-    if (!storedToken || !storedUrl) return;
+    if (!storedToken || !storedUrl) { setLibraryPickOwed(false); return; }   // no sign-in, so no choice owed
+    // A sign-in that ended at CHOOSE YOUR LIBRARIES (the tab or browser was closed there) still owes the viewer that
+    // choice: ask again before any scan (the choices are not reset: the sign-in already started them again).
+    if (libraryPickOwed() && !signInPending) resumeLibraryPick();
 
     // true = token rejected with 401/403; false/undefined = network error or success
     let tokenRevoked = false;
@@ -11525,6 +11635,7 @@
     sessionStorage.removeItem('plex90_jellyfin_user_id');
     try { localStorage.removeItem('nostalgex_library_signature'); } catch (e) {}   // the refresh fingerprint goes with the library it describes
     try { localStorage.removeItem('plex90_saved_auth'); } catch (e) {}
+    setLibraryPickOwed(false);   // nothing is signed in to choose for
     // The channel last watched is this account's too (the Apple TV clears it on disconnect). The OPEN ON LAST
     // CHANNEL switch is a preference and stays.
     try { localStorage.removeItem(NostalgexLastChannel.CHANNEL_KEY); } catch (e) {}
@@ -11786,6 +11897,17 @@
     console.log(`[Nostalgex] ${LC.orphanReport(result, onAir.size)} (counted in ${Math.round(performance.now() - started)} ms)`);
   }
 
+  // CLASSIC RERUNS (EPISODE ORDER) reads each episode's seTag ("S01E04"). A library saved before the scan kept it has
+  // none, but the number is in the item's `meta` ("Pilot" · S01E04 · 22 min), so it is read from there and a saved
+  // library airs in series order at once instead of in library order until it is read again.
+  function restoreSeTags(items) {
+    for (const item of items || []) {
+      if (item.type !== 'episode' || item.seTag || typeof item.meta !== 'string') continue;
+      const tag = item.meta.split(' \u00B7 ').find(part => /^(?:S\d+)?(?:E\d+)?$/.test(part) && part !== '');
+      if (tag) item.seTag = tag;
+    }
+  }
+
   async function loadLibraryCache(allowStale = false) {
     try {
       const parsed = await NostalgexStorage.libraryCache.load();
@@ -11795,6 +11917,7 @@
       if (url !== plexServerUrl) return null;
       const stale = Date.now() - ts > LIBRARY_CACHE_TTL || parsed.scanRevision !== LIBRARY_SCAN_REVISION;
       if (stale && !allowStale) return null;
+      restoreSeTags(items);
       return { items, ts, stale, skippedNoRuntime: Number(parsed.skippedNoRuntime) || 0 };
     } catch (e) {
       return null;
@@ -11944,7 +12067,7 @@
   // collections mirror AppState.scanCollections() / materializeDynamicChannels().
   // ══════════════════════════════════════
   let libraryExtrasGeneration = 0;
-  let enrichmentRecords = null;      // Map tmdbID -> record, re-attached after any item copy
+  let enrichmentRecords = null;      // Map `type:tmdbID` -> record, re-attached after any item copy
   let enrichmentLocalCache = null;
   let enrichmentStatus = '';
 
@@ -12723,6 +12846,8 @@
                   return {
                     title: show.Name || 'Unknown',
                     episodeTitle: epTitle,
+                    // "S01E04": the show's order, which CLASSIC RERUNS airs two episodes of at a time (EPISODE ORDER, I-103).
+                    seTag,
                     meta: [`"${epTitle}"`, seTag, formatDuration(durationMin)].filter(Boolean).join(' · '),
                     summary: ep.Overview || show.Overview || '',
                     year: show.ProductionYear || '',
@@ -13143,6 +13268,8 @@
                     return {
                       title: show.title || 'Unknown',
                       episodeTitle: epTitle,
+                      // "S01E04": the show's order, which CLASSIC RERUNS airs two episodes of at a time (EPISODE ORDER, I-103).
+                      seTag,
                       meta: [`"${epTitle}"`, seTag, formatDuration(durationMin)].filter(Boolean).join(' · '),
                       summary: ep.summary || show.summary || '',
                       year: show.year || '',

@@ -25,12 +25,9 @@ sub init()
 end sub
 
 ' Whether a launch would go straight into a library load: a saved sign-in
-' with servers to read, as launchLoad's own checks.
+' with servers to read and no pick owed, as launchLoad's own checks.
 function NxSignedInToLoad() as Boolean
-    reg = NxPlexRegistry()
-    if reg.Read("servers") = "" then return false
-    if NxSignedInKind() <> "plex" then return true
-    return NxPlexLoadToken() <> "" and reg.Read("needsPick") = ""
+    return NxLaunchReadsLibrary(NxPlexRegistry(), NxSignedInKind(), NxPlexLoadToken())
 end function
 
 ' upstream's UnfinishedLoadsView: LOADING DIDN'T FINISH, TRY AGAIN (OK) or
@@ -52,7 +49,12 @@ sub launchLoad()
         ' shows up as the library failing to load.
         if reg.Read("servers") <> "" then
             m.prompt.text = "Connecting to " + NxKindName(kind) + "…"
-            startLibrary(true)
+            ' A library pick still owed (#331) is asked for again first.
+            if NxLaunchReadsLibrary(reg, kind, "") then
+                startLibrary(true)
+            else
+                afterSignIn()
+            end if
             m.mbCheck = CreateObject("roSGNode", "MediaBrowserSignInTask")
             m.mbCheck.action = "check"
             m.mbCheck.ObserveField("status", "onMbCheck")
@@ -63,10 +65,17 @@ sub launchLoad()
         return
     end if
     if NxPlexLoadToken() = "" then
+        ' A sideload with a seed signs in from it (NxPlexSeedUrl), not from the connect screen.
+        if NxPlexSeedUrl() <> "" then
+            startSignIn()
+            return
+        end if
         showConnect()
         return
     end if
-    if reg.Read("servers") <> "" and reg.Read("needsPick") = "" then startLibrary(true)
+    ' With a server or library pick still owed, nothing loads yet: the sign-in's
+    ' "ready" shows the server picker, or asks for the libraries (onSignInState).
+    if NxLaunchReadsLibrary(reg, kind, NxPlexLoadToken()) then startLibrary(true)
     startSignIn()
 end sub
 
@@ -270,6 +279,7 @@ sub onSections()
         launchComplete()
     else
         print "library: "; sections.Count(); " library section(s), no picker"
+        NxLibraryPickSettled(NxPlexRegistry())
         startLibrary(true)
     end if
 end sub
@@ -281,6 +291,7 @@ sub onLibrariesPicked()
     choices = m.libPicker.choices
     NxSaveDeselectedSections(NxPlexRegistry(), choices.off)
     NxSaveIncludedHiddenSections(NxPlexRegistry(), choices.included)
+    NxLibraryPickSettled(NxPlexRegistry())
     print "library: libraries picked after "; m.libPickerClock.TotalMilliseconds(); " ms at the library picker, "; choices.off.Count(); " turned off, "; choices.included.Count(); " hidden turned on"
     closeLibPicker()
     if m.signedInClock <> invalid then m.signedInClock = CreateObject("roTimespan")
@@ -512,7 +523,7 @@ sub onLibraryStatus()
         end if
         startDailyRefresh()
         ' The live channels.json, once per launch, behind a guide that is up (N-074).
-        if first then fetchLiveChannels()
+        if first and NxLiveChannelsDue(NxRegSection("livechannels"), CreateObject("roDateTime").AsSeconds()) then fetchLiveChannels()
     end if
 end sub
 
@@ -523,7 +534,36 @@ end sub
 sub fetchLiveChannels()
     if m.liveChannels <> invalid and m.liveChannels.state = "run" then return
     m.liveChannels = CreateObject("roSGNode", "LiveChannelsTask")
+    m.liveChannels.ObserveField("result", "onLiveChannels")
     m.liveChannels.control = "run"
+end sub
+
+' The live channels.json answered. A copy newer than the one in use waits for a safe moment and then the
+' channels are built from the saved library, no server read: never while a channel is on full screen or
+' Settings is open; at the next 15-minute check at the latest, or the next launch, which reads the cache.
+sub onLiveChannels()
+    r = m.liveChannels.result
+    print "channels: live copy "; r
+    if Left(r, 4) = "new " then
+        m.liveChannelsPending = true
+        applyLiveChannels()
+    end if
+end sub
+
+sub applyLiveChannels()
+    if m.liveChannelsPending <> true then return
+    if m.guide = invalid or m.libraryBusy = true or m.seeded = true then return
+    if not m.guide.callFunc("onGuideScreen", invalid) then return
+    m.liveChannelsPending = false
+    if m.library <> invalid then
+        pct = NxMemPercentSafe()
+        if not NxLiveRebuildNow(m.library.titleCount, pct, NxMemLimitKB()) then
+            print "channels: a newer channels.json is cached; this library ("; m.library.titleCount; " titles, memory "; pct; "% of "; NxMemLimitKB(); " KB) is too big to rebuild behind the guide now, so the next launch uses it"
+            return
+        end if
+    end if
+    print "channels: a newer channels.json is cached; building the channels from the saved library"
+    startLibrary(true, true)
 end sub
 
 ' The seed's last airing ended before the library finished loading (#155):
@@ -562,8 +602,9 @@ end sub
 sub onDailyTick()
     if m.guide = invalid or m.libraryBusy = true then return
     now& = CreateObject("roDateTime").AsSeconds()
-    ' A TV left on asks for the live channels.json again about once a day.
+    ' A TV left on asks for the live channels.json again, at most once an hour (NxLiveChannelsIntervalSec).
     if NxLiveChannelsDue(NxRegSection("livechannels"), now&) then fetchLiveChannels()
+    applyLiveChannels()
     last& = now&
     held = NxLibraryHeld()
     if held <> invalid then last& = held.at
@@ -577,6 +618,8 @@ end sub
 ' library load runs, or while the seed's one-channel guide is up and the link
 ' names another channel (#203, NxDeepLinkWaits).
 sub onDeepLink()
+    ' A link that wakes the app is a chance to ask for a newer channels.json too (at most hourly).
+    if m.guide <> invalid and NxLiveChannelsDue(NxRegSection("livechannels"), CreateObject("roDateTime").AsSeconds()) then fetchLiveChannels()
     link = m.top.deepLink
     if m.guide <> invalid and NxDeepLinkWaits(m.seeded, m.seedChannels, link) then
         print "deep link: waiting for the full guide; the saved channel's guide hasn't the channel"

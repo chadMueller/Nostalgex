@@ -43,6 +43,27 @@ end sub
 
 sub runLinkSignIn()
     print "plex: sign-in task started"
+    ' A sideload's seed (nx_plex_seed_url): signed in from the page, no plex.tv, as a stand-in server is read.
+    if NxPlexSeedUrl() <> "" and (NxPlexLoadToken() = "" or NxPlexDevSeeded()) then
+        reg = NxPlexRegistry()
+        if NxPlexDevSeeded() then
+            m.top.account = reg.Read("devSeedAccount")
+        else
+            m.top.status = "checking"
+            res = NxServerRequest("GET", NxPlexSeedUrl(), {}, "", 15000)
+            name = NxPlexApplySeed(reg, res.json)
+            if name = "" then
+                fail("The sideload's seed at " + NxPlexSeedUrl() + " could not be read.")
+                return
+            end if
+            if NxClaimAccountCaches("seed:" + name, true) then print "plex: cleared the saved library left by another account, or by none recorded"
+            m.top.account = name
+        end if
+        m.top.message = "Signed in as " + m.top.account + "."
+        m.top.status = "ready"
+        print "plex: signed in from the sideload's seed; plex.tv is not asked"
+        return
+    end if
     token = NxPlexLoadToken()
     ' No saved sign-in: a first run, or the app deleted and installed again.
     fresh = token = ""
@@ -162,6 +183,8 @@ sub finishSignIn(token as String, account as Dynamic, fresh as Boolean)
     ' A new sign-in starts again: every library on, every hidden Jellyfin one off, and the
     ' old single hidden switch gone (I-092, N-016).
     NxResetLibraryChoices(reg, NxHiddenLibrariesRegistry())
+    ' Owed until CHOOSE YOUR LIBRARIES is answered or isn't needed (#331).
+    NxOweLibraryPick(reg)
     ' More than one: the viewer picks which first (MainScene, ServerPickerView).
     ' Kept until they do, so quitting at the picker brings it back.
     if found.Count() > 1 then reg.Write("needsPick", "1")

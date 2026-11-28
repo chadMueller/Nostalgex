@@ -119,8 +119,11 @@ const SUPABASE_ROWS = [
   null,
 ];
 
+// A film and a show with one number are two items now (EnrichmentTests.brs holds that case with the port's own
+// fixtures); no vector here repeats a number across types, so the file reads the same before and after the web
+// engine's change to key by type and number.
 const WORK_ITEMS = [
-  [{ tmdbID: 1399, type: "episode" }, { tmdbID: "1399", type: "movie" }, { tmdbID: 603, type: "movie" },
+  [{ tmdbID: 1399, type: "episode" }, { tmdbID: "1399", type: "episode" }, { tmdbID: 603, type: "movie" },
     { tmdbID: null }, { tmdbID: "" }, { tmdbID: "12a" }, { tmdbID: "1 OR 1=1" }, null],
   [{ tmdbID: "12345678901" }, { tmdbID: "1234567890" }, { tmdbID: "0" }, { tmdbID: "007", type: "episode" },
     { tmdbID: 7 }, { tmdbID: -3 }, { tmdbID: 4.5 }, { tmdbID: " 8" }, { tmdbID: "9\n" }],

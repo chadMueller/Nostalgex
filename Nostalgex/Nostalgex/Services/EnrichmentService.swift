@@ -15,13 +15,17 @@ private actor OMDBRateLimitFlag {
     func wasQuota() -> Bool { quota }
 }
 
-/// One TMDB id's worth of library items, as the enrichment pass sees them.
+/// One title's worth of library items, as the enrichment pass sees them: a TMDB number
+/// and its type. TMDB numbers films and shows separately, so a film and a show can share a
+/// number and are two titles.
 struct OMDBWorkItem {
     let tmdbID: String
     var imdbID: String?
     let mediaType: String
     /// The server's genres for the title, merged across its items.
     var genres: [String]
+
+    var key: String { MediaEnrichment.cacheKey(mediaType: mediaType, tmdbID: tmdbID) }
 }
 
 /// An OMDb lookup: the IMDb id to ask about and the TMDB row its answer merges into.
@@ -35,7 +39,9 @@ struct OMDBLookup {
 @MainActor
 class EnrichmentService {
 
-    // In-memory cache: tmdbID -> MediaEnrichment (TMDB + optional OMDb merged)
+    // In-memory cache: "type:id" (`MediaEnrichment.cacheKey`) -> MediaEnrichment (TMDB +
+    // optional OMDb merged). Never the bare number: a film and a show can share one, and the
+    // shared table keeps a row for each (its key is tmdb_id + media_type).
     private(set) var cache: [String: MediaEnrichment] = [:]
 
     // Progress tracking
@@ -57,8 +63,8 @@ class EnrichmentService {
 
     /// Look up enrichment data for a media item
     func enrichment(for item: PlexMediaItem) -> MediaEnrichment? {
-        guard let tmdbID = item.tmdbID else { return nil }
-        return cache[tmdbID]
+        guard let key = item.enrichmentKey else { return nil }
+        return cache[key]
     }
 
     /// Rows saved by the last pass, inside their 7-day TTL, merged under what is already in
@@ -69,7 +75,9 @@ class EnrichmentService {
     func loadDiskCache() -> Int {
         let rows = EnrichmentCacheStore.load()
         guard !rows.isEmpty else { return 0 }
-        for (id, row) in rows where cache[id] == nil { cache[id] = row }
+        // Keyed from each row's own type and number, so a file an older build wrote under
+        // the bare number loads too.
+        for row in rows.values where cache[row.cacheKey] == nil { cache[row.cacheKey] = row }
         print("[Enrichment] Loaded \(rows.count) cached rows from disk (\(cache.count) in memory)")
         return rows.count
     }
@@ -88,7 +96,7 @@ class EnrichmentService {
     /// back to Supabase from here.
     func seedCache(_ entries: [MediaEnrichment]) {
         for entry in entries {
-            cache[entry.tmdbID] = entry
+            cache[entry.cacheKey] = entry
         }
     }
 
@@ -111,7 +119,8 @@ class EnrichmentService {
 
     /// The titles worth an OMDb lookup: a TMDB row with no IMDb rating yet, a usable
     /// IMDb id (the server's, else the one TMDB gave), and a gate that admits the row's
-    /// media type plus its TMDB keywords, TMDB genres or server genres.
+    /// media type plus its TMDB keywords, TMDB genres or server genres. `enrichments` is
+    /// keyed by type and number (`MediaEnrichment.cacheKey`).
     nonisolated static func omdbCandidates(
         work: [OMDBWorkItem],
         enrichments: [String: MediaEnrichment],
@@ -120,7 +129,7 @@ class EnrichmentService {
         guard !gates.isEmpty else { return [] }
         var out: [OMDBLookup] = []
         for w in work {
-            guard let e = enrichments[w.tmdbID], e.imdbRating == nil else { continue }
+            guard let e = enrichments[w.key], e.imdbRating == nil else { continue }
             guard let imdbID = w.imdbID ?? e.imdbID, OMDBService.isValidIMDbID(imdbID) else { continue }
             guard OMDBQuota.isCandidate(
                 mediaType: e.mediaType, keywords: e.keywords, genres: e.tmdbGenres + w.genres, gates: gates
@@ -128,6 +137,13 @@ class EnrichmentService {
             out.append(OMDBLookup(tmdbID: w.tmdbID, imdbID: imdbID, existing: e))
         }
         return out
+    }
+
+    /// The titles the shared table had no row for. Matched by type and number: a show is
+    /// still fetched when the table only has the film with its number.
+    nonisolated static func needingFetch(work: [OMDBWorkItem], cached: [MediaEnrichment]) -> [OMDBWorkItem] {
+        let cachedKeys = Set(cached.map(\.cacheKey))
+        return work.filter { !cachedKeys.contains($0.key) }
     }
 
     /// Enrich all items in the library. Runs in background, updates progress.
@@ -152,14 +168,15 @@ class EnrichmentService {
         statusMessage = "Preparing..."
         progress = 0
 
-        // Step 1: Deduplicate TMDB IDs
-        // TV episodes share a show-level TMDB ID, so group by ID
-        // Track an IMDb ID per TMDB ID when available (first one wins)
+        // Step 1: Deduplicate titles
+        // TV episodes share a show-level TMDB ID, so group by type and ID. A film and a show
+        // with the same number are two titles.
+        // Track an IMDb ID per title when available (first one wins)
         var workItemsByTMDB: [String: OMDBWorkItem] = [:]
         for item in items {
-            guard let tmdbID = item.tmdbID else { continue }
-            let mediaType = item.type == .episode ? "tv" : "movie"
-            if var existing = workItemsByTMDB[tmdbID] {
+            guard let tmdbID = item.tmdbID, let key = item.enrichmentKey else { continue }
+            let mediaType = item.enrichmentMediaType
+            if var existing = workItemsByTMDB[key] {
                 // Fill in missing IMDb ID if a later item has one
                 if existing.imdbID == nil, let imdb = item.imdbID {
                     existing.imdbID = imdb
@@ -167,9 +184,9 @@ class EnrichmentService {
                 for g in item.genres where !existing.genres.contains(g) {
                     existing.genres.append(g)
                 }
-                workItemsByTMDB[tmdbID] = existing
+                workItemsByTMDB[key] = existing
             } else {
-                workItemsByTMDB[tmdbID] = OMDBWorkItem(
+                workItemsByTMDB[key] = OMDBWorkItem(
                     tmdbID: tmdbID, imdbID: item.imdbID, mediaType: mediaType, genres: item.genres
                 )
             }
@@ -193,7 +210,8 @@ class EnrichmentService {
 
         // Step 2: Check Supabase cache
         statusMessage = "Checking metadata cache"
-        let allIDs = Array(workItemsByTMDB.keys)
+        // The table is asked by number; it can answer with two rows for one (a film and a show).
+        let allIDs = Array(Set(workItemsByTMDB.values.map(\.tmdbID)))
         var cached: [MediaEnrichment] = []
         do {
             cached = try await supabase.fetchEnrichments(tmdbIDs: allIDs) { done, total in
@@ -203,7 +221,7 @@ class EnrichmentService {
                 }
             }
             for enrichment in cached {
-                cache[enrichment.tmdbID] = enrichment
+                cache[enrichment.cacheKey] = enrichment
             }
             let withOMDBCached = cached.filter { $0.imdbRating != nil }.count
             print("[Enrichment] \(cached.count)/\(total) cached in Supabase (\(withOMDBCached) with OMDb)")
@@ -221,8 +239,7 @@ class EnrichmentService {
 
         // Step 3: TMDB for every id with no cache row. OMDb is decided afterwards, once
         // the keywords that say whether a title could land on a gated channel are known.
-        let cachedIDs = Set(cached.map(\.tmdbID))
-        let needsTMDB = workItemsByTMDB.values.filter { !cachedIDs.contains($0.tmdbID) }
+        let needsTMDB = Self.needingFetch(work: Array(workItemsByTMDB.values), cached: cached)
 
         totalToEnrich = needsTMDB.count
         enrichedCount = 0
@@ -266,8 +283,8 @@ class EnrichmentService {
                 var pendingCount = 0
                 for await result in group {
                     if let enrichment = result {
-                        newByID[enrichment.tmdbID] = enrichment
-                        cache[enrichment.tmdbID] = enrichment
+                        newByID[enrichment.cacheKey] = enrichment
+                        cache[enrichment.cacheKey] = enrichment
                     }
                     pendingCount += 1
                     if pendingCount >= 5 || (enrichedCount + pendingCount) >= totalToEnrich {
@@ -337,8 +354,8 @@ class EnrichmentService {
                     var pendingCount = 0
                     for await result in group {
                         if let enrichment = result {
-                            newByID[enrichment.tmdbID] = enrichment
-                            cache[enrichment.tmdbID] = enrichment
+                            newByID[enrichment.cacheKey] = enrichment
+                            cache[enrichment.cacheKey] = enrichment
                         }
                         pendingCount += 1
                         if pendingCount >= 5 || (enrichedCount + pendingCount) >= totalToEnrich {

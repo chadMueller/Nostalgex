@@ -30,6 +30,13 @@ export function loadEngine(source = readFileSync(new URL("scripts/nostalgex-dail
   return { M: ctx.NostalgexDailyManifest, store };
 }
 
+/** The season and episode tag the loaders put on an episode ("S01E04"), which series order reads (I-103). */
+function seTagOf(season, episode) {
+  const s = season == null ? "" : `S${String(season).padStart(2, "0")}`;
+  const e = episode == null ? "" : `E${String(episode).padStart(2, "0")}`;
+  return s + e ? { seTag: s + e } : {};
+}
+
 /** Items as the web loaders build them (plex-tuner.html), through the engine's conversions. */
 export function makeItem(M, spec) {
   if (spec.compact) {
@@ -42,14 +49,20 @@ export function makeItem(M, spec) {
     const minutes = M.minutesFromPlexMs(raw.duration);
     if (minutes <= 0) return [key, null];
     const title = kind === "episode" ? (show.title ?? "") : raw.title;
-    return [key, { ratingKey: key, title, type: kind, duration: minutes, exactDurationSeconds: M.exactSecondsFromPlexMs(raw.duration), addedAt: raw.addedAt || 0 }];
+    return [key, { ratingKey: key, title, type: kind, duration: minutes, exactDurationSeconds: M.exactSecondsFromPlexMs(raw.duration), addedAt: raw.addedAt || 0,
+      ...(kind === "episode" ? seTagOf(raw.parentIndex, raw.index) : {}),
+      ...(kind === "episode" && show.ratingKey != null ? { showKey: String(show.ratingKey) } : {}),
+      ...(kind === "episode" && show.year ? { year: show.year } : {}) }];
   }
   if (backend === "jellyfin" || backend === "emby") {
     const key = raw.Id;
     const minutes = M.minutesFromTicks(raw.RunTimeTicks);
     if (minutes <= 0) return [key, null];
     const title = kind === "episode" ? (show.Name ?? raw.SeriesName ?? "") : (raw.Name ?? "");
-    return [key, { ratingKey: key, title, type: kind, duration: minutes, exactDurationSeconds: M.exactSecondsFromTicks(raw.RunTimeTicks), addedAt: M.unixSecondsFromISO(raw.DateCreated) }];
+    return [key, { ratingKey: key, title, type: kind, duration: minutes, exactDurationSeconds: M.exactSecondsFromTicks(raw.RunTimeTicks), addedAt: M.unixSecondsFromISO(raw.DateCreated),
+      ...(kind === "episode" ? seTagOf(raw.ParentIndexNumber, raw.IndexNumber) : {}),
+      // The loaders put the series id on every episode; a fixture without one is the Swift dump's stand-in.
+      ...(kind === "episode" ? { showKey: String(show.Id ?? "show") } : {}) }];
   }
   throw new Error(`unknown item ${backend} ${kind}`);
 }
@@ -59,6 +72,8 @@ export function dump(engine, fx) {
   const savedTZ = process.env.TZ;
   process.env.TZ = fx.zone;
   store.clear();
+  // EPISODE ORDER (I-103): a fixture without one is CLASSIC RERUNS.
+  if (typeof M.setEpisodeOrder === "function") M.setEpisodeOrder(fx.episodeOrder || "classic");
   try {
     const sk = fx.fingerprint;
     const byKey = new Map();

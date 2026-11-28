@@ -48,3 +48,18 @@ end function
 function NxKeepAliveTries() as Integer
     return 3
 end function
+
+' How long the hold clip may sit in buffering before it counts as a failed try
+' (#334). Buffering alone does nothing (NxKeepAliveAction), but a clip once stayed
+' in it for about 40 minutes, and nothing looked at it again.
+function NxKeepAliveStallSecs() as Integer
+    return 10
+end function
+
+' What the stall timer does when it fires: a clip still buffering is a failure,
+' restarted through the same three tries as an error ("play", then "giveup"
+' once `errors`, counting this one, reaches three). Any other state: "".
+function NxKeepAliveStallAction(state as String, errors as Integer) as String
+    if state <> "buffering" then return ""
+    return NxKeepAliveAction("error", errors)
+end function

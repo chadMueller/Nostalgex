@@ -47,6 +47,15 @@ function httpGet(address as String, headers as Object, limitMs as Integer) as Ob
     return { code: code, text: msg.GetString(), headers: msg.GetResponseHeaders() }
 end function
 
+' One GET, with a second try when nothing answered (NxWxGetRetrying).
+function httpGetRetrying(address as String, headers as Object, limitMs as Integer) as Object
+    return NxWxGetRetrying(httpGet, httpPause, address, headers, limitMs)
+end function
+
+sub httpPause(ms as Integer)
+    Sleep(ms)
+end sub
+
 ' One GET into a file: the response code, 0 when it did not arrive.
 function httpGetFile(address as String, path as String, limitMs as Integer) as Integer
     xfer = CreateObject("roUrlTransfer")
@@ -74,7 +83,7 @@ end function
 function forecastJob(args as Object) as Object
     place = args.place
     address = NxWxForecastUrl(NxWxBase() + "/api/weather", place)
-    got = httpGet(address, { "X-Nostalgex-Client": "roku", "Accept": "application/json" }, 15000)
+    got = httpGetRetrying(address, { "X-Nostalgex-Client": "roku", "Accept": "application/json" }, 15000)
     if got.code <> 200 then return { ok: false, code: got.code }
     body = NxWxTrim(ParseJson(got.text))
     if body = invalid or body.properties.timeseries.Count() = 0 then return { ok: false, code: got.code, why: "empty" }
@@ -94,7 +103,7 @@ end function
 
 ' A file of the place list, parsed, or invalid.
 function NxWxNetLoad(path as String) as Dynamic
-    got = httpGet(NxWxBase() + "/weather/" + path, { "Accept": "application/json" }, 12000)
+    got = httpGetRetrying(NxWxBase() + "/weather/" + path, { "Accept": "application/json" }, 12000)
     if got.code <> 200 then return invalid
     return ParseJson(got.text)
 end function
@@ -206,7 +215,7 @@ function radarJob(args as Object) as Object
     ' Memory: the channel gives the frames up before it goes over three quarters of the app's limit.
     if CreateObject("roAppMemoryMonitor").GetMemoryLimitPercent() > 75 then return { ok: false, why: "memory" }
     now = CreateObject("roDateTime").AsSeconds()
-    caps = httpGet(NxWxCapabilitiesUrl(provider, provider.layers[0]), { "Accept": "text/xml" }, 15000)
+    caps = httpGetRetrying(NxWxCapabilitiesUrl(provider, provider.layers[0]), { "Accept": "text/xml" }, 15000)
     if caps.code <> 200 then return { ok: false, why: "capabilities " + caps.code.ToStr() }
     stamps = NxWxPickFrameTimes(NxWxParseTimeDimension(caps.text), provider.frames, provider.stepMinutes, now - provider.lagMinutes * 60)
     if stamps.Count() = 0 then return { ok: false, why: "no frames" }

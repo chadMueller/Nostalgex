@@ -2,7 +2,8 @@
 <!-- CH 299 LOCAL WEATHER, the picture (source/weather/Weather.brs has the rules, WeatherTask the network).
      Laid out in 1920 x 1080, the web tuner's numbers (scripts/nostalgex-weather-screens.js): the owner
      scales it into the guide's preview box or to the whole screen. Four screens on a 65 second
-     wall-clock loop: CURRENT CONDITIONS, TODAY'S FORECAST, the 5-DAY FORECAST and RADAR. It reads the
+     wall-clock loop: CURRENT CONDITIONS, TODAY'S FORECAST, the 5-DAY FORECAST and RADAR; the first three on a
+     45 second loop for a place with no radar coverage. It reads the
      viewer's place and units itself, asks for the forecast and the radar only while it is active, and
      its music is played by the guide (GuideView.startWeatherMusic: a Video node, so the TV sees playback and keeps the screensaver off). -->
 <component name="WeatherView" extends="Group">

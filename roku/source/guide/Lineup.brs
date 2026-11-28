@@ -187,6 +187,12 @@ end function
 ' not just their minutes, or an exact runtime at all), so a day packed while
 ' the library had no runtimes is packed again once they arrive.
 function NxPoolFingerprint(pool as Object) as String
+    return NxPoolFingerprintBase(pool) + NxEpisodeOrderSuffix()
+end function
+
+' The fingerprint without the EPISODE ORDER's suffix: what depends on the pool alone (NxPoolPrepare keeps it, so
+' a change of order does not read every pool again).
+function NxPoolFingerprintBase(pool as Object) as String
     keys = []
     withRuntime = 0
     for each it in pool
@@ -227,10 +233,11 @@ end sub
 
 ' What depends only on a pool: its playable items, their lookup and its
 ' fingerprint, { valid, lookup, fp (invalid for none) }. `memo`, when given, holds it
+' (its fp without the EPISODE ORDER's suffix, which is added at each call)
 ' from an earlier call with the same pool: the fingerprint alone took most of a
 ' 30 s re-check at 120 channels.
 function NxPoolPrepare(pool as Object, memo = invalid as Dynamic) as Object
-    if memo <> invalid and memo.fp <> invalid then return { valid: memo.valid, lookup: memo.lookup, fp: memo.fp }
+    if memo <> invalid and memo.fp <> invalid then return { valid: memo.valid, lookup: memo.lookup, fp: memo.fp + NxEpisodeOrderSuffix(), memo: memo }
     valid = []
     lookup = {}
     lookup.SetModeCaseSensitive()
@@ -241,13 +248,17 @@ function NxPoolPrepare(pool as Object, memo = invalid as Dynamic) as Object
         end if
     end for
     fp = invalid
-    if valid.Count() > 0 then fp = NxPoolFingerprint(valid)
+    base = invalid
+    if valid.Count() > 0 then
+        base = NxPoolFingerprintBase(valid)
+        fp = base + NxEpisodeOrderSuffix()
+    end if
     if memo <> invalid then
         memo.valid = valid
         memo.lookup = lookup
-        memo.fp = fp
+        memo.fp = base
     end if
-    return { valid: valid, lookup: lookup, fp: fp }
+    return { valid: valid, lookup: lookup, fp: fp, memo: memo }
 end function
 
 ' The day's blocks for a channel as [{ item, startSec, endSec }]. Mirrors
@@ -272,7 +283,7 @@ function NxManifestBlocks(channel as Object, pool as Object, atSec as LongIntege
         ' Not stored. This channel takes its place in the lineup with the pool
         ' it was asked with; one the guide doesn't carry packs after the
         ' lineup, against it, so it never changes what the guide's channels air.
-        own = { channel: channel, pool: valid, fp: fp }
+        own = { channel: channel, pool: valid, fp: fp, memo: prepared.memo }
         entries = []
         at = -1
         ' By index: the guide's `for each` over its channels is this very array,
@@ -293,7 +304,7 @@ function NxManifestBlocks(channel as Object, pool as Object, atSec as LongIntege
                 else
                     ws = NxWatershedSet()
                     lp = NxPoolPrepare(NxTimeFilteredPool(lc, lc.pool, day.hour, ws), NxPoolMemo(lc, day.hour, ws))
-                    if lp.valid.Count() > 0 then entries.Push({ channel: lc, pool: lp.valid, fp: lp.fp })
+                    if lp.valid.Count() > 0 then entries.Push({ channel: lc, pool: lp.valid, fp: lp.fp, memo: lp.memo })
                 end if
             end if
         end for
@@ -445,7 +456,7 @@ function NxPackLineupDay(entries as Object, extra as Dynamic, day as Object) as 
                 over = b.endSec
             end if
         end for
-        packed = NxPackDay(entry.pool, day.dayStartSec, dayEndSec, day.dayNumber, channel.id, aired, NxTruthy(channel.isPremiereChannel), last, occupancy, NxIsGated(channel), over)
+        packed = NxPackDay(entry.pool, day.dayStartSec, dayEndSec, day.dayNumber, channel.id, aired, NxTruthy(channel.isPremiereChannel), last, occupancy, NxIsGated(channel), over, entry.memo)
         cache[channel.id.ToStr() + "_" + day.dayKey] = { fp: entry.fp, blocks: packed }
         packedBy[channel.id.ToStr()] = packed
         if extra = invalid or channel.id <> extra.channel.id then

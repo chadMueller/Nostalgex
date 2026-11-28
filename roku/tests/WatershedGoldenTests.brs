@@ -118,6 +118,12 @@ function NxRunWatershedGateTests() as Integer
     NxCheck(r, "keep-alive: a third error gives up", NxKeepAliveAction("error", 3), "giveup")
     NxCheck(r, "keep-alive: a fifth error still gives up", NxKeepAliveAction("error", 5), "giveup")
     NxCheck(r, "keep-alive: playing and buffering do nothing", NxKeepAliveAction("playing", 0) + NxKeepAliveAction("buffering", 0), "")
+    ' A clip still buffering when the stall timer fires is a failure, through the same three tries (#334).
+    NxCheck(r, "keep-alive stall: a first stall is tried again", NxKeepAliveStallAction("buffering", 1), "play")
+    NxCheck(r, "keep-alive stall: a second is tried again", NxKeepAliveStallAction("buffering", 2), "play")
+    NxCheck(r, "keep-alive stall: a third gives up", NxKeepAliveStallAction("buffering", 3), "giveup")
+    NxCheck(r, "keep-alive stall: playing, finished or stopped by then does nothing", NxKeepAliveStallAction("playing", 1) + NxKeepAliveStallAction("finished", 1) + NxKeepAliveStallAction("stopped", 1), "")
+    NxCheck(r, "keep-alive stall: a short wait, under a minute", FormatJson(NxKeepAliveStallSecs() > 0 and NxKeepAliveStallSecs() < 60), "true")
 
     print "watershed gate cases:"; r.pass; " passed,"; r.fail; " failed"
     return r.fail

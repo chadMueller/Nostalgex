@@ -19,8 +19,8 @@ end function
 
 ' watershed: the switch the guide is (or would be) scheduled with
 ' (NxGuideKeyRest).
-function NxGuideCacheKey(nowSec as LongInteger, bundles as Object, watershed as Boolean) as String
-    return NxSavedKey(NxBuildKey(), NxGuideKeyRest(NxLocalDay(nowSec).dayKey, bundles, NxChoicesKey(), watershed))
+function NxGuideCacheKey(nowSec as LongInteger, bundles as Object, watershed as Boolean, order = "classic" as String) as String
+    return NxSavedKey(NxBuildKey(), NxGuideKeyRest(NxLocalDay(nowSec).dayKey, bundles, NxChoicesKey(), watershed, order))
 end function
 
 ' Which build this is, for the cache keys: the app version and the hash of
@@ -29,7 +29,8 @@ end function
 ' the version, and its channel data and filter may still have changed.
 function NxBuildKey() as String
     info = CreateObject("roAppInfo")
-    return info.GetVersion() + "+" + info.GetValue("nx_build")
+    ' And the live channels.json in use, so a new copy rebuilds the saved guide and pools.
+    return info.GetVersion() + "+" + info.GetValue("nx_build") + NxLiveChannelsKeyPart(NxRegSection("livechannels"))
 end function
 
 '' The viewer's franchise, collection and server switches, as part of a cache key.
@@ -256,7 +257,7 @@ function NxGuideFromSavedPools(nowSec as LongInteger, bundles as Object) as Dyna
     channels = NxScheduleGuide(ordered, nowSec, true)
     print "library: saved pools scheduled for today in "; timer.TotalMilliseconds(); " ms"
     guide = {
-        channels: channels, builtAt: nowSec, watershed: NxWatershedSet(), items: saved.libraryItems,
+        channels: channels, builtAt: nowSec, watershed: NxWatershedSet(), episodeOrder: NxEpisodeOrder(), items: saved.libraryItems,
         bundles: saved.bundles, enabledBundles: bundles, franchises: saved.franchises,
         collections: saved.collections, poolsFingerprint: NxToStr(saved.fingerprint)
     }
@@ -266,6 +267,7 @@ function NxGuideFromSavedPools(nowSec as LongInteger, bundles as Object) as Dyna
 end function
 
 sub loadLibrary()
+    NxMemTraceReset()
     ' A task of its own for the library sections on the servers, asked for before the
     ' first scan (I-092): mode "sections".
     if m.top.mode = "sections" then
@@ -292,7 +294,7 @@ sub loadLibrary()
         if raw <> "" then
             saved = ParseJson(raw)
             if type(saved) = "roAssociativeArray" then
-                guideKey = NxGuideCacheKey(clock0.nowSec, NxEnabledBundles(), NxWatershedOn())
+                guideKey = NxGuideCacheKey(clock0.nowSec, NxEnabledBundles(), NxWatershedOn(), NxSyncEpisodeOrder())
                 if NxSavedKeyShowable(saved.key, guideKey) and type(saved.guide) = "roAssociativeArray" then
                     m.savedGuideKey = saved.key
                     ' Another build scheduled it, so its schedules don't
@@ -326,6 +328,7 @@ sub loadLibrary()
                 setLineup(fromPools.ordered)
                 fromPools.guide.channels = NxScheduleGuide(fromPools.ordered, clock0.nowSec)
                 fromPools.guide.watershed = NxWatershedSet()
+                fromPools.guide.episodeOrder = NxEpisodeOrder()
                 m.top.guide = fromPools.guide
                 m.shownGuide = fromPools.guide
                 m.top.status = "ready"
@@ -408,6 +411,8 @@ sub loadLibrary()
         return
     end if
     NxScanSectionsReset()
+    ' Where the app's memory stands before this load reads anything (the guard's reference, NxMemFullFor).
+    NxScanMemBaseSet()
     for i = 0 to servers.Count() - 1
         ' A server with no address is left out this time; it's tried again on
         ' the next load.
@@ -440,6 +445,9 @@ sub loadLibrary()
                 got = scanUnderWatch(servers[i], i, info)
                 if loadStale() then return
                 skipped = NxScanSkips()
+                if got <> invalid then
+                    if got.Count() > NxNumberOr0(GetGlobalAA().nxScanBiggest) then GetGlobalAA().nxScanBiggest = got.Count()
+                end if
                 cutRead = NxScanCapped()
                 cutOf = NxScanCapTotal()
                 if NxScanCapped() > 0 then m.top.incomplete = true
@@ -482,6 +490,7 @@ sub loadLibrary()
         end if
     end for
     print "library: "; items.Count(); " items in "; timer.TotalMilliseconds(); " ms ("; scanned.Count(); " servers scanned)"
+    NxMemTraceNote("SCAN", items.Count(), "TITLES")
     if items.Count() = 0 and emptyStop = "viewer" then
         fail("Stopped waiting. Nothing had come back from your server, so no channels were built. Press OK to try again when the connection looks better.")
         return
@@ -511,7 +520,16 @@ sub loadLibrary()
                 s.signature = invalid
             end if
         else
-            got = NxCollectionsFetchBoxSets(s.key, NxToStr(servers[s.index].userId), NxMbFetcher(servers[s.index]), m.top)
+            ' Only what the scan read can be a member: with every video library turned off there is
+            ' nothing to ask, and a member from a library that is off is not kept (a BoxSet is not
+            ' tied to a library, so the server lists them all).
+            known = NxCollectionsKnownKeys(items, s.index)
+            if known.Count() = 0 then
+                got = []
+            else
+                got = NxCollectionsFetchBoxSets(s.key, NxToStr(servers[s.index].userId), NxMbFetcher(servers[s.index]), m.top, known)
+            end if
+            known = invalid
         end if
         if got = invalid then
             collections.failed = collections.failed + 1
@@ -521,6 +539,7 @@ sub loadLibrary()
         end if
     end for
     print "library: "; collections.raw.Count(); " server collections ("; collections.failed; " servers failed) in "; timer.TotalMilliseconds(); " ms"
+    NxMemTraceNote("COLLECTIONS", collections.raw.Count(), "COLLECTIONS")
     config = NxChannelsConfig(NxCacheRoot(), "pkg:/data/channels.json").config
     manifest = ParseJson(ReadAsciiFile("pkg:/data/channels-memberships.json"))
 
@@ -546,6 +565,25 @@ sub loadLibrary()
         timer.Mark()
         reuse = NxSavedFiltered(items, config, NxFilterClock(), NxEnabledBundles())
         if reuse <> invalid then print "library: "; reuse.Count(); " channels' filter results from the last build, read in "; timer.TotalMilliseconds(); " ms"
+    end if
+    ' No room to build: the channel build takes about half again what the scan added, and a TV past its
+    ' limit ends the app with no message (a Plex server has no scan guard at all). So the build is not
+    ' started: a guide on screen stays as it is (the saved library is not replaced), a first load says why,
+    ' and its next try asks which libraries to read (the library pick is owed again), so it cannot read
+    ' the same too much again.
+    roomPct = NxMemPercentSafe()
+    if not NxBuildRoomFor(roomPct, GetGlobalAA().nxScanMemBase, NxNumberOr0(GetGlobalAA().nxScanBiggest)) then
+        NxMemTraceNote("BUILD SKIPPED", items.Count(), "TITLES")
+        print "library: no room to build the channels: memory at "; roomPct; "% after "; items.Count(); " titles"
+        m.top.incomplete = true
+        if shown then
+            print "library: keeping the saved guide"
+            keepSavedGuide()
+            return
+        end if
+        NxOweLibraryPick(NxPlexRegistry())
+        fail(NxBuildRoomLine(items.Count()))
+        return
     end if
     built = invalid
     if NxEnrichHasRemoteWork(state, opts) then
@@ -623,6 +661,7 @@ sub loadLibrary()
         reg.Flush()
     end if
     if scanned.Count() > 0 then print "library: saved the library in "; timer.TotalMilliseconds(); " ms; memory "; CreateObject("roAppMemoryMonitor").GetMemoryLimitPercent(); "% of the app's limit"
+    if scanned.Count() > 0 then NxMemTraceNote("SAVED", items.Count(), "TITLES")
     ' Every item's filter cache goes; the library itself stays for package
     ' switches (rebuildForBundles). The pools hold most of it anyway, and
     ' reading it back from cachefs: for each switch kept two copies alive
@@ -739,6 +778,7 @@ function buildGuide(items as Object, config as Object, manifest as Object, colle
     m.top.bar = -1
     m.top.barCaption = ""
     print "library: built "; built; " channels ("; reused; " kept from the last build) in "; timer.TotalMilliseconds(); " ms"
+    NxMemTraceNote("CHANNELS", built, "CHANNELS")
     setPhase("finishing")
     m.top.progress = ""
 
@@ -837,12 +877,15 @@ function buildGuide(items as Object, config as Object, manifest as Object, colle
     old = m.shownGuide
     sameSchedule = false
     NxSetWatershed(NxWatershedOn())
+    NxSyncEpisodeOrder()
     builtAt& = nowSec&
     if shown and old <> invalid and not m.shownOtherBuild then
         if NxToStr(old.poolsFingerprint) = fingerprint and type(old.channels) = "roArray" and NxIsNumber(old.builtAt) then
             oldAt& = old.builtAt
             ' Scheduled with the WATERSHED switch as it is now, too.
             sameSchedule = NxLocalDay(oldAt&).dayKey = NxLocalDay(nowSec&).dayKey and (old.watershed = true) = NxWatershedSet()
+            ' And with the EPISODE ORDER as it is now: a day packed under the other order is packed again.
+            if sameSchedule and NxGuideEpisodeOrder(old) <> NxEpisodeOrder() then sameSchedule = false
         end if
     end if
     builtWatershed = NxWatershedSet()
@@ -855,6 +898,7 @@ function buildGuide(items as Object, config as Object, manifest as Object, colle
         out = NxScheduleGuide(ordered, nowSec&)
         print "library: scheduled in "; timer.TotalMilliseconds(); " ms"
     end if
+    NxMemTraceNote("SCHEDULE", out.Count(), "CHANNELS")
     ' The sidebar (NxGuideJumpTargets) jumps to the first channel shown of each
     ' package. FRANCHISES covers the classics, the found franchises and the
     ' franchise collections; the other collections get an entry of their own.
@@ -874,7 +918,7 @@ function buildGuide(items as Object, config as Object, manifest as Object, colle
     jumps = []
     if customCollectionIDs.Count() > 0 then jumps.Push({ name: "OTHER COLLECTIONS", ids: customCollectionIDs })
     guide = {
-        channels: out, builtAt: builtAt&, watershed: builtWatershed, poolsFingerprint: fingerprint, items: items.Count(), bundles: bundleList, enabledBundles: bundles, jumps: jumps,
+        channels: out, builtAt: builtAt&, watershed: builtWatershed, episodeOrder: NxEpisodeOrder(), poolsFingerprint: fingerprint, items: items.Count(), bundles: bundleList, enabledBundles: bundles, jumps: jumps,
         franchises: franchiseRows, franchiseOverCap: franchiseOverCap, franchiseCapacity: NxFranchiseCapacity(),
         collections: { rows: cl.rows, overCap: cl.overCap, overCapFranchises: cl.overCapFranchises, overCapCustom: cl.overCapCustom,
             capacityFranchises: NxCollectionFranchiseCapacity(), capacityCustom: NxCollectionsCapacity(), scanned: collections.raw.Count(), failed: collections.failed }
@@ -914,7 +958,7 @@ function buildGuide(items as Object, config as Object, manifest as Object, colle
     ' never reused from the file). cachefs: can lose a file, so it must be there.
     fs = CreateObject("roFileSystem")
     timer.Mark()
-    guideKey = NxGuideCacheKey(nowSec&, bundles, guide.watershed = true)
+    guideKey = NxGuideCacheKey(nowSec&, bundles, guide.watershed = true, NxGuideEpisodeOrder(guide))
     if matched and sameSchedule and m.savedGuideKey = guideKey and fs.Exists(NxGuideCachePath()) then
         print "library: the saved guide is this one; not saved again"
     else
@@ -1011,11 +1055,12 @@ sub keepScheduling(ordered as Object, guide as Object, builtChannels as Object, 
             end if
         else if type(msg) = "roSGNodeEvent" and hourKeyNow() <> lastHour then
             nowSec& = CreateObject("roDateTime").AsSeconds()
-            lastHour = NxScheduleHourKey(nowSec&, NxWatershedSet())
+            lastHour = NxScheduleHourKey(nowSec&, NxWatershedSet(), NxEpisodeOrder())
             t = CreateObject("roTimespan")
             setLineup(ordered)
             channels = NxScheduleGuide(ordered, nowSec&)
             guide.watershed = NxWatershedSet()
+            guide.episodeOrder = NxEpisodeOrder()
             ' What the re-check costs: about 120 channels took a core for 9 to 10 s.
             print "library: rescheduled "; channels.Count(); " channels in "; t.TotalMilliseconds(); " ms; memory "; NxMemoryLine()
             now = FormatJson(channels)
@@ -1039,19 +1084,20 @@ end sub
 ' registry, so every schedule is built with the switch as it is now.
 sub setLineup(ordered as Object)
     NxSetWatershed(NxWatershedOn())
+    NxSyncEpisodeOrder()
     NxSetLineup(ordered)
 end sub
 
 ' The re-check's key for a guide: its hour and the switch it was built with.
 function guideHourKey(guide as Object) as String
-    return NxScheduleHourKey(guide.builtAt, guide.watershed = true)
+    return NxScheduleHourKey(guide.builtAt, guide.watershed = true, NxGuideEpisodeOrder(guide))
 end function
 
-' The key now, with the switch read afresh: a switch in Settings reschedules
+' The key now, with the switch and the EPISODE ORDER read afresh: a change in Settings reschedules
 ' on the next re-check, as a new hour does.
 function hourKeyNow() as String
     NxSetWatershed(NxWatershedOn())
-    return NxScheduleHourKey(CreateObject("roDateTime").AsSeconds(), NxWatershedSet())
+    return NxScheduleHourKey(CreateObject("roDateTime").AsSeconds(), NxWatershedSet(), NxSyncEpisodeOrder())
 end function
 
 ' The coverage count for Settings' library line (#207,
@@ -1176,7 +1222,7 @@ sub keepSavedGuide()
             m.top.bundleBuilt = "rebuild"
         else if type(msg) = "roSGNodeEvent" and hourKeyNow() <> lastHour then
             nowSec& = CreateObject("roDateTime").AsSeconds()
-            lastHour = NxScheduleHourKey(nowSec&, NxWatershedSet())
+            lastHour = NxScheduleHourKey(nowSec&, NxWatershedSet(), NxEpisodeOrder())
             if ordered = invalid then
                 clock = NxFilterClock(nowSec&)
                 fromPools = NxGuideFromSavedPools(nowSec&, guide.enabledBundles)
@@ -1191,6 +1237,7 @@ sub keepSavedGuide()
                 setLineup(ordered)
                 guide.channels = NxScheduleGuide(ordered, nowSec&)
                 guide.watershed = NxWatershedSet()
+                guide.episodeOrder = NxEpisodeOrder()
                 m.top.guide = guide
                 m.top.status = "ready"
                 print "library: saved guide rescheduled from the saved pools (new day or time restriction)"

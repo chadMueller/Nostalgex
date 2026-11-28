@@ -121,6 +121,12 @@ function NxCutLine(counts as Dynamic) as String
     return "READ " + NxGroupedInt(read) + " OF " + NxGroupedInt(of) + " TITLES. THIS TV RAN OUT OF ROOM. TURN OFF A LIBRARY TO FIT."
 end function
 
+' The line for a load that read the library and found no room to build the channels from it, the
+' scan's cut line's words (I-091). Shown where the load's errors are, and kept under MEMORY in ABOUT.
+function NxBuildRoomLine(titles as Integer) as String
+    return "THIS TV RAN OUT OF ROOM BEFORE BUILDING CHANNELS FROM " + NxGroupedInt(titles) + " TITLES. TURN OFF A LIBRARY TO FIT."
+end function
+
 ' ── What the registry keeps ─────────────────────────────────────────────────
 
 ' After each load, with the sign-in, so a sign-out clears it as upstream's

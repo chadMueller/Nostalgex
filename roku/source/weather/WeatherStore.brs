@@ -58,6 +58,22 @@ sub NxWxSaveChannelOn(on as Boolean)
     reg.Flush()
 end sub
 
+' One GET with a second try when nothing answered. The first request to nostalgex.app after the stick has sat idle
+' for a minute or two fails with code 0 (3 of 3 on the stick, 2026-11-28: a place search, another place search, the
+' first forecast) and the next one works, so a viewer's first search read PLACE LIST NOT AVAILABLE. Only code 0 is tried
+' again, once, after `pauseMs`; any answer (a 404, a 500) stands. `get(address, headers, limitMs)` is the one
+' attempt ({ code, text, headers }), `pause` what waits between them (Sleep on the TV, a counter in the tests).
+' A timeout also returns code 0, so the worst case is about 30 s on the task thread (two 15 s tries).
+function NxWxGetRetrying(get as Function, pause as Function, address as String, headers as Object, limitMs as Integer, pauseMs = 500 as Integer) as Object
+    got = get(address, headers, limitMs)
+    if got.code = 0 then
+        print "weather: no answer from "; address; "; trying once more"
+        pause(pauseMs)
+        got = get(address, headers, limitMs)
+    end if
+    return got
+end function
+
 ' The relay and the place files: the site's, and in a sideloaded build a manifest line (nx_weather_base)
 ' can point them at a stand-in server on the network. A signed build never reads that line.
 function NxWxBase() as String
@@ -75,6 +91,8 @@ end function
 
 ' The last forecast kept: { key, savedSec, expiresSec, body }, or invalid when none, or for another place.
 function NxWxReadForecast(key as String) as Dynamic
+    ' No file is the first read: not an error to print.
+    if not CreateObject("roFileSystem").Exists(NxWxForecastPath()) then return invalid
     raw = ReadAsciiFile(NxWxForecastPath())
     if raw = "" then return invalid
     v = ParseJson(raw)

@@ -9,7 +9,9 @@
 '
 ' Source: upstream scripts/nostalgex-enrichment.js (at the commit in
 ' data/UPSTREAM), itself a mirror of EnrichmentService.swift:
-'   1. one work item per TMDB id (the first item's media type wins)
+'   1. one work item per TMDB number and type (an episode is tv, anything else movie): a film and a
+'      show with one number are two titles, and a record, a cache row and a lookup are keyed by both
+'      (NxEnrichKey, as the web tuner's recordKey), because the shared table's key is (tmdb_id, media_type)
 '   2. a local cache, then the shared Supabase cache (`media_enrichments`)
 '   3. the misses from TMDB through upstream's relay (api/tmdb.js)
 '   4. OMDb, through the same relay, for at most 50 titles per load that could
@@ -421,13 +423,14 @@ function NxEnrichIsOMDbCandidate(mediaType as Dynamic, keywords as Dynamic, genr
     return false
 end function
 
-' Server genres per TMDB id, merged across the id's items, in first-seen order.
+' Server genres per title (NxEnrichKey: type and TMDB number), merged across the title's items, in
+' first-seen order. A film's genres are never merged into a show that has the same number.
 function NxEnrichGenresByTMDB(items as Object) as Object
     out = {}
     for each item in items
         if type(item) = "roAssociativeArray" then
             if item.tmdbID <> invalid then
-                id = NxToStr(item.tmdbID)
+                id = NxEnrichKey(NxEnrichMediaTypeOf(item), item.tmdbID)
                 entry = out[id]
                 if entry = invalid then
                     entry = { list: [], seen: {} }
@@ -448,20 +451,22 @@ function NxEnrichGenresByTMDB(items as Object) as Object
 end function
 
 ' EnrichmentService.omdbCandidates: an unrated record with a valid IMDb id
-' that some gate admits. Returns [{ tmdbID, imdbID, record }].
+' that some gate admits. `records` and `genresByID` are keyed by NxEnrichKey.
+' Returns [{ tmdbID, mediaType, imdbID, record }].
 function NxEnrichOMDbCandidates(work as Object, records as Object, genresByID as Object, gates as Object) as Object
     out = []
     if gates.Count() = 0 then return out
     for each w in work
-        e = records[w.tmdbID]
+        key = NxEnrichKey(w.mediaType, w.tmdbID)
+        e = records[key]
         if e <> invalid then
             if e.imdbRating = invalid and NxEnrichIsImdbID(e.imdbID) then
                 genres = []
                 genres.Append(NxList(e.tmdbGenres))
-                byID = genresByID[w.tmdbID]
+                byID = genresByID[key]
                 if byID <> invalid then genres.Append(byID.list)
                 if NxEnrichIsOMDbCandidate(e.mediaType, e.keywords, genres, gates) then
-                    out.Push({ tmdbID: w.tmdbID, imdbID: e.imdbID, record: e })
+                    out.Push({ tmdbID: w.tmdbID, mediaType: w.mediaType, imdbID: e.imdbID, record: e })
                 end if
             end if
         end if
@@ -528,8 +533,28 @@ function NxEnrichOMDbBackoff(store as Dynamic) as Object
     }
 end function
 
-' One work item per TMDB id. Episodes are tv, everything else movie. First
-' item wins. Ids that aren't 1 to 10 digits never leave the TV.
+' The key a record is kept and looked up by: "movie:603" or "tv:603". TMDB numbers films and shows
+' separately, so a film and a show can share a number; the shared table's key is the number plus the type
+' (media_type), and a row is never found by the number alone. As the web tuner's recordKey: anything but tv is movie.
+function NxEnrichKey(mediaType as Dynamic, tmdbID as Dynamic) as String
+    kind = "movie"
+    if NxIsString(mediaType) then
+        if mediaType = "tv" then kind = "tv"
+    end if
+    return kind + ":" + NxToStr(tmdbID)
+end function
+
+' The type TMDB files an item under: an episode's number is its show's, everything else is a film.
+function NxEnrichMediaTypeOf(item as Object) as String
+    if NxIsString(item.type) then
+        if item.type = "episode" then return "tv"
+    end if
+    return "movie"
+end function
+
+' One work item per title: a TMDB number and its type. A film and a show with the same number are two
+' titles. Episodes are tv, everything else movie. First item wins. Ids that aren't 1 to 10 digits never
+' leave the TV.
 function NxEnrichWorkItems(items as Object) as Object
     out = []
     seen = {}
@@ -537,13 +562,13 @@ function NxEnrichWorkItems(items as Object) as Object
         if type(item) = "roAssociativeArray" then
             if item.tmdbID <> invalid then
                 id = NxToStr(item.tmdbID)
-                if NxRx("tmdbID", "^\d{1,10}(?![\s\S])").IsMatch(id) and not seen.DoesExist(id) then
-                    seen[id] = true
-                    mediaType = "movie"
-                    if NxIsString(item.type) then
-                        if item.type = "episode" then mediaType = "tv"
+                if NxRx("tmdbID", "^\d{1,10}(?![\s\S])").IsMatch(id) then
+                    mediaType = NxEnrichMediaTypeOf(item)
+                    key = NxEnrichKey(mediaType, id)
+                    if not seen.DoesExist(key) then
+                        seen[key] = true
+                        out.Push({ "tmdbID": id, "mediaType": mediaType })
                     end if
-                    out.Push({ "tmdbID": id, "mediaType": mediaType })
                 end if
             end if
         end if
@@ -565,14 +590,14 @@ function NxEnrichChunk(list as Object, size as Integer) as Object
     return out
 end function
 
-' Sets item.enrichment on every item whose TMDB id has a record, and drops
-' the filter's cached view of it. Returns how many.
+' Sets item.enrichment on every item whose type and TMDB number have a record (`records` is keyed by
+' NxEnrichKey), and drops the filter's cached view of it. Returns how many.
 function NxEnrichAttach(items as Object, records as Object) as Integer
     n = 0
     for each item in items
         if type(item) = "roAssociativeArray" then
             if item.tmdbID <> invalid then
-                e = records[NxToStr(item.tmdbID)]
+                e = records[NxEnrichKey(NxEnrichMediaTypeOf(item), item.tmdbID)]
                 if e <> invalid then
                     item.enrichment = e
                     NxFilterForget(item)
@@ -621,32 +646,66 @@ function NxEnrichReadSupabase(ids as Object, cfg as Object, net as Object, nowSe
     return out
 end function
 
-' SupabaseService.upsertEnrichments: chunks of 200, merge-duplicates.
-' `omdb` picks the OMDb columns; otherwise the TMDB ones.
-function NxEnrichUpsertSupabase(records as Object, cfg as Object, net as Object, omdb as Boolean) as Integer
+' The rows an upsert sends, as the Apple TV's SupabaseService.upsertBodies (N-093): each row carries only the
+' columns it has a value for (a value that is invalid is left out, never sent as null, because a null would
+' wipe what another device saved: a rating, a franchise, a count), and rows with the same columns go together.
+' The shared table refuses a request whose rows do not all carry the same keys (PGRST102), and the columns
+' named in the request decide which columns the write may touch, so each group names its own.
+' `omdb` picks the OMDb columns; otherwise the TMDB ones. Returns [{ columns, rows }] in the order a group
+' first appears; a group is not cut into requests here (NxEnrichUpsertSupabase does that).
+function NxEnrichUpsertGroups(records as Object, omdb as Boolean) as Object
     k = NxEnrichConstants()
     columns = k.tmdbColumns
     if omdb then columns = k.omdbColumns
+    order = []
+    groups = {}
+    for each e in records
+        full = invalid
+        if omdb then full = NxEnrichToOMDbRow(e) else full = NxEnrichToSupabaseRow(e)
+        row = {}
+        have = []
+        for each c in columns
+            v = full[c]
+            if v <> invalid then
+                row[c] = v
+                have.Push(c)
+            end if
+        end for
+        sig = have.Join(",")
+        if not groups.DoesExist(sig) then
+            groups[sig] = { columns: have, rows: [] }
+            order.Push(sig)
+        end if
+        groups[sig].rows.Push(row)
+    end for
+    out = []
+    for each sig in order
+        out.Push(groups[sig])
+    end for
+    return out
+end function
+
+' SupabaseService.upsertEnrichments: chunks of 200, merge-duplicates, a group of rows with the same columns at a time.
+function NxEnrichUpsertSupabase(records as Object, cfg as Object, net as Object, omdb as Boolean) as Integer
+    k = NxEnrichConstants()
     size = k.supabaseChunk
     if cfg.chunkSize <> invalid then size = cfg.chunkSize
     headers = NxEnrichSupabaseHeaders(cfg.anonKey)
     headers["Prefer"] = "resolution=merge-duplicates,return=minimal"
     written = 0
-    for each part in NxEnrichChunk(records, size)
-        rows = []
-        for each e in part
-            if omdb then rows.Push(NxEnrichToOMDbRow(e)) else rows.Push(NxEnrichToSupabaseRow(e))
+    for each group in NxEnrichUpsertGroups(records, omdb)
+        for each rows in NxEnrichChunk(group.rows, size)
+            res = net.fetchAll([{
+                method: "POST",
+                url: cfg.supabaseURL + "/rest/v1/media_enrichments?columns=" + group.columns.Join(","),
+                headers: headers, body: FormatJson(rows)
+            }], 1)[0]
+            if res.status < 200 or res.status >= 300 then
+                print "enrichment: Supabase upsert failed: HTTP "; res.status
+            else
+                written = written + rows.Count()
+            end if
         end for
-        res = net.fetchAll([{
-            method: "POST",
-            url: cfg.supabaseURL + "/rest/v1/media_enrichments?columns=" + columns.Join(","),
-            headers: headers, body: FormatJson(rows)
-        }], 1)[0]
-        if res.status < 200 or res.status >= 300 then
-            print "enrichment: Supabase upsert failed: HTTP "; res.status
-        else
-            written = written + part.Count()
-        end if
     end for
     return written
 end function
@@ -675,26 +734,49 @@ function NxEnrichOMDbRequest(imdbID as Dynamic, cfg as Object) as Dynamic
 end function
 
 ' ── Local cache ─────────────────────────────────────────────────────────────
-' Rows: { tmdbID, savedAt (seconds), record or invalid }. An invalid record is
-' a TMDB 404, kept for a day so a title TMDB doesn't know isn't asked for on
-' every load.
+' Rows: { tmdbID, mediaType, savedAt (seconds), record or invalid }, kept and looked up by NxEnrichKey (type
+' and number). An invalid record is a TMDB 404, kept for a day so a title TMDB doesn't know isn't asked for
+' on every load.
 
 function NxEnrichMemoryCache() as Object
     return {
         rows: {},
-        getMany: function(ids as Object) as Object
+        getMany: function(keys as Object) as Object
             out = {}
-            for each id in ids
-                if m.rows.DoesExist(id) then out[id] = m.rows[id]
+            for each key in keys
+                if m.rows.DoesExist(key) then out[key] = m.rows[key]
             end for
             return out
         end function,
         putMany: sub(rows as Object)
             for each r in rows
-                m.rows[r.tmdbID] = r
+                m.rows[NxEnrichKey(r.mediaType, r.tmdbID)] = r
             end for
         end sub
     }
+end function
+
+' A saved file's rows, keyed again by each row's own type and number. A file an earlier build wrote kept
+' its rows under the bare number: a row with a record takes the record's type; a saved miss has no type
+' and is dropped (it is asked of TMDB once more).
+function NxEnrichRekeyRows(saved as Object) as Object
+    out = {}
+    for each k in saved
+        row = saved[k]
+        if type(row) = "roAssociativeArray" and row.tmdbID <> invalid then
+            mediaType = invalid
+            if NxIsString(row.mediaType) then
+                mediaType = row.mediaType
+            else if type(row.record) = "roAssociativeArray" then
+                if NxIsString(row.record.mediaType) then mediaType = row.record.mediaType
+            end if
+            if mediaType <> invalid then
+                row.mediaType = mediaType
+                out[NxEnrichKey(mediaType, row.tmdbID)] = row
+            end if
+        end if
+    end for
+    return out
 end function
 
 ' The same, kept in one JSON file (cachefs: survives a relaunch until the OS
@@ -713,12 +795,12 @@ function NxEnrichFileCache(path as String) as Object
         if CreateObject("roFileSystem").Exists(m.path) then raw = ReadAsciiFile(m.path)
         if raw <> "" then
             saved = ParseJson(raw)
-            if type(saved) = "roAssociativeArray" then m.rows = saved
+            if type(saved) = "roAssociativeArray" then m.rows = NxEnrichRekeyRows(saved)
         end if
     end sub
-    c.getMany = function(ids as Object) as Object
+    c.getMany = function(keys as Object) as Object
         m.load()
-        return m.memGet(ids)
+        return m.memGet(keys)
     end function
     c.putMany = sub(rows as Object)
         m.load()
@@ -799,13 +881,14 @@ function NxEnrichFromCaches(items as Object, opts as Object) as Object
     state.stats.ids = state.work.Count()
     if state.work.Count() = 0 then return state
 
-    ids = []
+    keys = []
     for each w in state.work
-        ids.Push(w.tmdbID)
+        keys.Push(NxEnrichKey(w.mediaType, w.tmdbID))
     end for
-    localRows = opts.cache.getMany(ids)
+    localRows = opts.cache.getMany(keys)
     for each w in state.work
-        row = localRows[w.tmdbID]
+        key = NxEnrichKey(w.mediaType, w.tmdbID)
+        row = localRows[key]
         fresh = false
         if row <> invalid then
             ttl = k.missTtlSec
@@ -814,7 +897,7 @@ function NxEnrichFromCaches(items as Object, opts as Object) as Object
         end if
         if fresh then
             if row.record <> invalid then
-                state.records[w.tmdbID] = row.record
+                state.records[key] = row.record
                 state.stats.local = state.stats.local + 1
             else
                 state.stats.misses = state.stats.misses + 1
@@ -827,14 +910,23 @@ function NxEnrichFromCaches(items as Object, opts as Object) as Object
     toStore = []
     if state.needRemote.Count() > 0 then
         if opts.progress <> invalid then opts.progress.report(0, state.needRemote.Count(), "cache")
+        ' The table is asked by number and can answer with two rows for one (a film and a show), so each
+        ' number is asked once and a row is kept only for a title the library has, by its type.
+        wanted = {}
         remoteIDs = []
+        askedIDs = {}
         for each w in state.needRemote
-            remoteIDs.Push(w.tmdbID)
+            wanted[NxEnrichKey(w.mediaType, w.tmdbID)] = true
+            if not askedIDs.DoesExist(w.tmdbID) then
+                askedIDs[w.tmdbID] = true
+                remoteIDs.Push(w.tmdbID)
+            end if
         end for
         for each e in NxEnrichReadSupabase(remoteIDs, cfg, opts.net, nowSec&, opts.progress)
-            if not state.records.DoesExist(e.tmdbID) then
-                state.records[e.tmdbID] = e
-                toStore.Push({ tmdbID: e.tmdbID, savedAt: nowSec&, record: e })
+            key = NxEnrichKey(e.mediaType, e.tmdbID)
+            if wanted.DoesExist(key) and not state.records.DoesExist(key) then
+                state.records[key] = e
+                toStore.Push({ tmdbID: e.tmdbID, mediaType: e.mediaType, savedAt: nowSec&, record: e })
                 state.stats.supabase = state.stats.supabase + 1
             end if
         end for
@@ -848,7 +940,7 @@ end function
 function NxEnrichHasRemoteWork(state as Object, opts as Object) as Boolean
     if state.skipped or state.work.Count() = 0 then return false
     for each w in state.needRemote
-        if not state.records.DoesExist(w.tmdbID) then return true
+        if not state.records.DoesExist(NxEnrichKey(w.mediaType, w.tmdbID)) then return true
     end for
     return NxEnrichOMDbGates(opts.channels).Count() > 0
 end function
@@ -866,7 +958,7 @@ function NxEnrichFromRemote(state as Object, items as Object, opts as Object) as
 
     toFetch = []
     for each w in state.needRemote
-        if not state.records.DoesExist(w.tmdbID) then toFetch.Push(w)
+        if not state.records.DoesExist(NxEnrichKey(w.mediaType, w.tmdbID)) then toFetch.Push(w)
     end for
     fresh = []
     freshStore = []
@@ -886,12 +978,12 @@ function NxEnrichFromRemote(state as Object, items as Object, opts as Object) as
                 res = results[i]
                 if res.status = 200 then
                     e = NxParseTMDBResponse(NxEnrichParseBody(res.body), w.tmdbID, invalid, w.mediaType, fetchedAt)
-                    state.records[w.tmdbID] = e
+                    state.records[NxEnrichKey(w.mediaType, w.tmdbID)] = e
                     fresh.Push(e)
-                    freshStore.Push({ tmdbID: w.tmdbID, savedAt: nowSec&, record: e })
+                    freshStore.Push({ tmdbID: w.tmdbID, mediaType: w.mediaType, savedAt: nowSec&, record: e })
                     state.stats.fetched = state.stats.fetched + 1
                 else if res.status = 404 then
-                    freshStore.Push({ tmdbID: w.tmdbID, savedAt: nowSec&, record: invalid })
+                    freshStore.Push({ tmdbID: w.tmdbID, mediaType: w.mediaType, savedAt: nowSec&, record: invalid })
                     state.stats.misses = state.stats.misses + 1
                 else
                     state.stats.failed = state.stats.failed + 1
@@ -961,9 +1053,9 @@ function NxEnrichFromRemote(state as Object, items as Object, opts as Object) as
                             state.omdb.misses = state.omdb.misses + 1
                         else
                             merged = NxEnrichMergeOMDb(c.record, parsed, c.imdbID)
-                            state.records[c.tmdbID] = merged
+                            state.records[NxEnrichKey(c.mediaType, c.tmdbID)] = merged
                             omdbFresh.Push(merged)
-                            freshStore.Push({ tmdbID: c.tmdbID, savedAt: nowSec&, record: merged })
+                            freshStore.Push({ tmdbID: c.tmdbID, mediaType: c.mediaType, savedAt: nowSec&, record: merged })
                             state.omdb.fetched = state.omdb.fetched + 1
                         end if
                     end if

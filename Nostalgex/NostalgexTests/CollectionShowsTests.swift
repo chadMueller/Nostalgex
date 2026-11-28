@@ -322,15 +322,20 @@ final class CollectionShowsTests: XCTestCase {
         // The first pass airs every episode once before any repeat ...
         let firstPass = Array(blocks.prefix(19)).map(\.item)
         XCTAssertEqual(Set(firstPass.map(\.id)).count, 19)
-        // ... never more than two of one show in a row (interleaveByShow) ...
+        // ... never more than two of one show in a row while another show is still to come (interleaveByShow; the
+        // end of the pass can be one show alone once the others have run out) ...
         var run = 1
-        for (a, b) in zip(firstPass, firstPass.dropFirst()) {
+        for (i, (a, b)) in zip(firstPass, firstPass.dropFirst()).enumerated() {
             run = a.title == b.title ? run + 1 : 1
-            XCTAssertLessThanOrEqual(run, 2, "\(b.title) ran \(run) in a row")
+            if firstPass[(i + 2)...].contains(where: { $0.title != b.title }) {
+                XCTAssertLessThanOrEqual(run, 2, "\(b.title) ran \(run) in a row")
+            }
         }
-        // ... and not in season/episode order.
+        // ... and each show in season and episode order from the episode it starts on (CLASSIC RERUNS, I-103).
         let alphaOrder = firstPass.filter { $0.title == "Alpha Island" }.compactMap(\.seTag)
-        XCTAssertNotEqual(alphaOrder, alphaOrder.sorted(), "episodes are shuffled, not aired in order")
+        let sorted = alphaOrder.sorted()
+        let from = try XCTUnwrap(sorted.firstIndex(of: try XCTUnwrap(alphaOrder.first)))
+        XCTAssertEqual(alphaOrder, Array(sorted[from...] + sorted[..<from]), "a show's episodes air in order from a starting spot")
     }
 
     /// Jellyfin / Emby shape: one global BoxSet list for every library, a mixed BoxSet, and

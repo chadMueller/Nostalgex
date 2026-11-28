@@ -50,7 +50,7 @@ extension AppState {
     }
 
     #if DEBUG
-    /// Test-only: `-uiTestGuideLoadFixture <changing|loading|stalled|updating|ready>` puts demo mode's guide in one
+    /// Test-only: `-uiTestGuideLoadFixture <changing|loading|stalled|schedule|updating|ready>` puts demo mode's guide in one
     /// state of the loading pattern for screenshots. Never set in a shipping run.
     func applyGuideLoadFixtureIfRequested() {
         let args = ProcessInfo.processInfo.arguments
@@ -63,6 +63,11 @@ extension AppState {
             scanItemsFound = 4210
             guideLoadDetail = LoadNotice.libraryLine("TV shows", done: 1200, total: 1450)
             isLoadStalling = args[i + 1] == "stalled"
+        case "schedule":
+            guideLoadInPlace = .changing
+            isLoading = true
+            libraryLoadPhase = .finishing
+            scanItemsFound = 4210
         case "updating":
             isBackgroundRefreshing = true
             scanItemsFound = 4210

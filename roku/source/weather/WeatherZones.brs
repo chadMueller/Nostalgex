@@ -80,6 +80,7 @@ function NxWxZoneTable() as Object
     z["America/Argentina/Ushuaia"] = "-180;"
     z["America/Aruba"] = "-240;"
     z["America/Asuncion"] = "-180;1711249200:-240,1728187200:-180"
+    z["America/Atikokan"] = "-300;"
     z["America/Bahia"] = "-180;"
     z["America/Bahia_Banderas"] = "-360;"
     z["America/Barbados"] = "-240;"

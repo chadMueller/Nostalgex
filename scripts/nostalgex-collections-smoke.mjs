@@ -241,12 +241,20 @@ const marvel = { id: 101, number: 101, name: "MARVEL", itemPool: [] };
       for (let i = 1; i <= n; i++) eps.push({ ratingKey: `${key}-${i}`, title: show, showKey: key, type: "episode", duration: 22, seTag: `S01E${String(i).padStart(2, "0")}` });
     }
     const order = DM.interleaveByShow(eps, C.ID_BASE, 20375);
+    // The end of the ordering can be one show alone once the others have run out; only runs with another show still to come count.
     let run = 1, maxRun = 1;
-    for (let i = 1; i < order.length; i++) { run = order[i].title === order[i - 1].title ? run + 1 : 1; maxRun = Math.max(maxRun, run); }
+    for (let i = 1; i < order.length; i++) {
+      run = order[i].title === order[i - 1].title ? run + 1 : 1;
+      if (order.slice(i + 1).some((x) => x.title !== order[i].title)) maxRun = Math.max(maxRun, run);
+    }
+    // CLASSIC RERUNS (I-103): a show's episodes run in series order from a random spot, wrapping at the end.
     const alphaTags = order.filter((i) => i.title === "Alpha Island").map((i) => i.seTag);
+    const sortedTags = [...alphaTags].sort();
+    const from = sortedTags.indexOf(alphaTags[0]);
+    const rotated = sortedTags.slice(from).concat(sortedTags.slice(0, from));
     check("schedule: every episode once", new Set(order.map((i) => i.ratingKey)).size, 19);
-    check("schedule: at most two of a show in a row", maxRun <= 2, true);
-    check("schedule: shuffled, not S/E order", JSON.stringify(alphaTags) !== JSON.stringify([...alphaTags].sort()), true);
+    check("schedule: at most two of a show in a row while another show waits", maxRun <= 2, true);
+    check("schedule: a show runs in S/E order from its starting episode", JSON.stringify(alphaTags), JSON.stringify(rotated));
   } else {
     failures.push("daily manifest module did not expose interleaveByShow");
   }

@@ -10,6 +10,10 @@ enum LoadNotice {
     static let loading = "LOADING YOUR LIBRARY"
     /// How long GUIDE READY stays in the header.
     static let readySeconds: Double = 4
+    /// The step names of a load, the same on every platform (Android's `LoadNotice.kt` set them): the channels are
+    /// built while the library is read, the schedule once it is built.
+    static let buildingChannels = "BUILDING CHANNELS"
+    static let buildingSchedule = "BUILDING SCHEDULE"
 
     /// 4210 reads "4,210" whatever the TV's locale: the lines are the same on every platform.
     static func count(_ n: Int) -> String {
@@ -32,6 +36,14 @@ enum LoadNotice {
         let label = name.trimmingCharacters(in: .whitespaces).uppercased()
         if let done, let total, total > 0, done <= total { return "\(label): \(count(done)) OF \(count(total))" }
         return label
+    }
+
+    /// The line under the read count: the library being read while the scan runs (its name and how far through),
+    /// otherwise the step the load is on. Nothing during the first, quiet step.
+    static func detailLine(phase: LibraryLoadPhase, scanDetail: String) -> String {
+        if phase == .scanningLibrary { return scanDetail }
+        if phase == .preparing { return "" }
+        return phase.title.uppercased()
     }
 
     /// The header's line while the library is read again behind a guide that is already up.

@@ -8,6 +8,9 @@
 sub Main(args = invalid as Dynamic)
     timer = CreateObject("roTimespan")
     failures = 0
+    ' Every suite packs under CLASSIC RERUNS unless it says otherwise (the saved choice is a registry read, and a TV's
+    ' own is not the test's to rely on).
+    NxSetEpisodeOrder("classic")
     if NxTestWants("schedule") then
         failures = failures + NxRunScheduleTests("pkg:/tests/vectors/schedule.json")
         print "  schedule took "; timer.TotalMilliseconds(); " ms"
@@ -41,6 +44,16 @@ sub Main(args = invalid as Dynamic)
     if NxTestWants("schedule-parity") then
         failures = failures + NxRunScheduleParityGoldenTests("pkg:/tests/vectors/schedule-parity-golden.json", "pkg:/tests/vectors/schedule-parity-zones.json")
         print "  schedule parity took "; timer.TotalMilliseconds(); " ms"
+    end if
+    timer.Mark()
+    if NxTestWants("episode-order") then
+        failures = failures + NxRunEpisodeOrderTests("pkg:/tests/vectors/schedule.json")
+        print "  episode order took "; timer.TotalMilliseconds(); " ms"
+    end if
+    timer.Mark()
+    if NxTestWants("episode-order-golden") then
+        failures = failures + NxRunEpisodeOrderGoldenTests("pkg:/tests/vectors/episode-order-golden.json", "pkg:/tests/vectors/schedule-parity-zones.json")
+        print "  episode order golden took "; timer.TotalMilliseconds(); " ms"
     end if
     timer.Mark()
     if NxTestWants("franchise") then
@@ -102,6 +115,7 @@ sub Main(args = invalid as Dynamic)
     if NxTestWants("library-sections") then failures = failures + NxRunLibrarySectionsTests()
     if NxTestWants("load-state") then failures = failures + NxRunLoadStateTests()
     if NxTestWants("hidden-libraries") then failures = failures + NxRunHiddenLibrariesTests("pkg:/tests/fixtures/mediabrowser-server.json")
+    if NxTestWants("memory-budget") then failures = failures + NxRunMemoryBudgetTests()
     if NxTestWants("weather") then failures = failures + NxRunWeatherTests("pkg:/tests/vectors/weather-golden.json")
     if NxTestWants("library-picker") then failures = failures + NxRunLibraryPickerGoldenTests("pkg:/tests/vectors/library-picker-golden.json")
     if NxTestWants("report") then failures = failures + NxRunReportTests("pkg:/tests/vectors/watch.json", "pkg:/tests/vectors/watch-cleanup-golden.json")

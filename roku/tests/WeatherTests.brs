@@ -99,6 +99,10 @@ function NxRunWeatherTests(goldenPath as String) as Integer
         end if
     end for
     NxWxRadarUrlChecks(r)
+    for each c in g.providers
+        NxCheck(r, "has radar " + c.cc + " " + NxToStr(c.lat), NxToStr(NxWxHasRadar({ cc: c.cc, lat: c.lat, lon: c.lon })), NxToStr(c.provider <> invalid))
+    end for
+    NxWxLoopChecks(r)
 
     for each c in g.postcode
         NxCheck(r, "postcode " + c.cc + " " + c.text, NxWxPostcodeLookup(c.cc, c.text), NxToStr(c.key))
@@ -123,6 +127,27 @@ function NxRunWeatherTests(goldenPath as String) as Integer
     NxWxSearchChecks(r)
     NxWxRelayChecks(r, g)
     NxWxGuideChecks(r, g)
+
+    ' One retry on a code 0 answer (the first request after the stick has idled), and only on code 0.
+    for each c in [
+        { name: "an answer is taken as it is", codes: [200], calls: 1, code: 200 },
+        { name: "a 404 is not tried again", codes: [404, 200], calls: 1, code: 404 },
+        { name: "a 500 is not tried again", codes: [500, 200], calls: 1, code: 500 },
+        { name: "no answer, then an answer: the second is taken", codes: [0, 200], calls: 2, code: 200 },
+        { name: "no answer twice: one retry only", codes: [0, 0, 200], calls: 2, code: 0 },
+        { name: "no answer, then a 404 stands", codes: [0, 404], calls: 2, code: 404 }
+    ]
+        GetGlobalAA().nxWxTest = { codes: c.codes, calls: 0, pauses: [] }
+        got = NxWxGetRetrying(NxWxTestGet, NxWxTestPause, "https://example.test/weather/places/meta.json", {}, 12000, 500)
+        t = GetGlobalAA().nxWxTest
+        NxCheck(r, "retry: " + c.name, FormatJson([got.code, t.calls, t.pauses.Count()]), FormatJson([c.code, c.calls, c.calls - 1]))
+    end for
+    GetGlobalAA().nxWxTest = { codes: [0, 200], calls: 0, pauses: [] }
+    NxWxGetRetrying(NxWxTestGet, NxWxTestPause, "https://example.test/x", {}, 12000)
+    NxCheck(r, "retry: the pause is short (500 ms unless told)", FormatJson(GetGlobalAA().nxWxTest.pauses), "[500]")
+    ' The search itself: a place file that fails once and then works gives its matches through the loader's retry.
+    GetGlobalAA().nxWxTest = { codes: [0, 200], calls: 0, pauses: [] }
+    NxCheck(r, "retry: a first-read failure then success is one answer", NxToStr(NxWxGetRetrying(NxWxTestGet, NxWxTestPause, "u", {}, 1).text), "x")
 
     print "weather: "; r.pass; " passed, "; r.fail; " failed"
     return r.fail
@@ -279,6 +304,18 @@ sub NxWxZoneChecks(r as Object)
     NxCheck(r, "zone: valid", NxToStr(NxWxValidZone("America/Toronto")) + NxToStr(NxWxValidZone("Nope/Zone")) + NxToStr(NxWxValidZone("")), "truefalsefalse")
     ' The table has to reach well past the clock, or the zones stop changing: run
     ' node tests/gen-weather-zones.mjs again.
+    ' Every zone the place files name resolves, or a place in it would read as UTC (America/Atikokan, 2026-11-18).
+    meta = ParseJson(ReadAsciiFile("pkg:/tests/vectors/weather-places-meta.json"))
+    missing = []
+    if type(meta) = "roAssociativeArray" and type(meta.tz) = "roArray" then
+        for each tz in meta.tz
+            if not NxWxValidZone(tz) then missing.Push(tz)
+        end for
+        NxCheck(r, "zone: the place files' zones are all in the table (" + meta.tz.Count().ToStr() + ")", missing.Join(","), "")
+    else
+        NxCheck(r, "zone: the place files' zone list can be read", "no", "yes")
+    end if
+    NxCheck(r, "zone: Atikokan keeps Coral Harbour's offset", NxWxFmtClock(NxWxParseIso("2026-07-01T12:00:00Z"), "America/Atikokan") + " " + NxWxFmtClock(NxWxParseIso("2026-07-01T12:00:00Z"), "America/Coral_Harbour"), "7:00 AM 7:00 AM")
     NxCheck(r, "zone table reaches 2033 at least", NxToStr(NxWxZoneTableEnd() > NxWxParseIso("2033-01-01T00:00:00Z")), "true")
 end sub
 
@@ -360,6 +397,121 @@ sub NxWxSearchChecks(r as Object)
     NxCheck(r, "plain", NxWxPlain("Torreón, São Paulo-1") + "|" + NxWxPlain("Łódź"), "torreonsaopaulo1|odz")
     NxCheck(r, "upper keeps the marks", NxWxUpper("Torreón, Zürich"), "TORREÓN, ZÜRICH")
     NxCheck(r, "files are what the loader reads", NxToStr(files.Count() > 0), "true")
+    NxWxSearchRetryChecks(r)
+    NxWxSearchCapChecks(r)
+end sub
+
+' A loader that fails on the paths in m.nxWxFailing (as a TV with no network or a timeout does: invalid) and
+' reads the stand-in files otherwise, and counts its calls in m.nxWxCalls.
+function NxWxFlakyLoad(path as String) as Dynamic
+    m.nxWxCalls = m.nxWxCalls + 1
+    if m.nxWxFailing[path] = true then return invalid
+    return NxWxStandInFiles()[path]
+end function
+
+' A failed load is never remembered (the Apple TV kept a failed place list until relaunch, 2026-11-18): the next search
+' asks again, with the same loader, and gets its answer.
+sub NxWxSearchRetryChecks(r as Object)
+    m.nxWxCalls = 0
+    m.nxWxFailing = { "places/meta.json": true }
+    res = NxWxSearch("toronto", NxWxFlakyLoad)
+    NxCheck(r, "retry: the place list failed", res.hint + "|" + res.places.Count().ToStr() + "|" + m.nxWxCalls.ToStr(), "PLACE LIST NOT AVAILABLE|0|1")
+    m.nxWxFailing = {}
+    res = NxWxSearch("toronto", NxWxFlakyLoad)
+    NxCheck(r, "retry: the same loader, asked again, answers", res.hint + "|" + res.places.Count().ToStr() + "|" + res.places[0].label, "|2|TORONTO, ON, CA")
+    ' A shard that fails reads as no matches for that search, and is asked for again at the next.
+    m.nxWxFailing = { "places/c/tor.json": true }
+    res = NxWxSearch("toronto", NxWxFlakyLoad)
+    NxCheck(r, "retry: a city file that failed gives no matches", res.places.Count().ToStr(), "0")
+    m.nxWxFailing = {}
+    res = NxWxSearch("toronto", NxWxFlakyLoad)
+    NxCheck(r, "retry: and the city file is asked for again", res.places.Count().ToStr(), "2")
+    m.nxWxFailing = { "places/z/US/90.json": true }
+    res = NxWxSearch("90210", NxWxFlakyLoad)
+    NxCheck(r, "retry: a postcode file that failed gives no matches", res.places.Count().ToStr(), "0")
+    m.nxWxFailing = {}
+    res = NxWxSearch("90210", NxWxFlakyLoad)
+    NxCheck(r, "retry: and the postcode file is asked for again", res.places.Count().ToStr(), "1")
+    ' Nothing is kept between searches: one more search is one more load of the list.
+    m.nxWxCalls = 0
+    NxWxSearch("toronto", NxWxFlakyLoad)
+    NxWxSearch("toronto", NxWxFlakyLoad)
+    NxCheck(r, "retry: no memory between searches", m.nxWxCalls.ToStr(), "4")
+end sub
+
+' A stand-in set with many matches: 40 postcodes that begin 90210 (the whole code last in the file) and 40 cities.
+function NxWxManyFiles() as Object
+    deg = NxWxStandInFiles()
+    zips = []
+    for i = 0 to 39
+        zips.Push(["90210" + Right("00" + i.ToStr(), 2), "Long " + i.ToStr(), "CA", 34.1, -118.41, 4])
+    end for
+    zips.Push(["90210", "Beverly Hills", "CA", 34.1, -118.41, 4])
+    deg["places/z/US/90.json"] = zips
+    cities = []
+    for i = 0 to 39
+        cities.Push(["Springtown " + Right("00" + i.ToStr(), 2), "US", "TX", 30.0 + i / 100.0, -95.0, 1])
+    end for
+    deg["places/c/sp.json"] = cities
+    return deg
+end function
+
+function NxWxManyLoad(path as String) as Dynamic
+    return NxWxManyFiles()[path]
+end function
+
+' GitHub #332: up to 36 matches, the whole postcode first and then the longer codes in file order.
+sub NxWxSearchCapChecks(r as Object)
+    NxCheck(r, "cap: the limit", NxWxMaxResults().ToStr(), "36")
+    res = NxWxSearch("90210", NxWxManyLoad)
+    NxCheck(r, "cap: a postcode with 41 matches gives 36", res.places.Count().ToStr(), "36")
+    NxCheck(r, "cap: the whole code first, then the longer ones in file order", res.places[0].code + " " + res.places[1].code + " " + res.places[2].code + " " + res.places[35].code, "90210 9021000 9021001 9021034")
+    res = NxWxSearch("springtown", NxWxManyLoad)
+    NxCheck(r, "cap: a name with 40 matches gives 36", res.places.Count().ToStr(), "36")
+    res = NxWxSearch("902", NxWxManyLoad)
+    NxCheck(r, "cap: part of a postcode, 36 of its codes", res.places.Count().ToStr(), "36")
+end sub
+
+' GitHub #332: a place with no radar coverage plays CURRENT, TODAY, 5-DAY in 45 seconds, not the four in 65.
+sub NxWxLoopChecks(r as Object)
+    ids = function(list as Object) as String
+        out = []
+        for each sc in list
+            out.Push(sc.id)
+        end for
+        return out.Join(",")
+    end function
+    NxCheck(r, "loop: with radar, as the golden", ids(NxWxScreens()) + "|" + NxWxLoopSeconds().ToStr(), "current,today,week,radar|65")
+    NxCheck(r, "loop: with no radar", ids(NxWxScreens(false)) + "|" + NxWxLoopSeconds(false).ToStr(), "current,today,week|45")
+    total = 0
+    for each sc in NxWxScreens(false)
+        total = total + sc.seconds
+    end for
+    NxCheck(r, "loop: the three screens add up to the loop", total.ToStr(), "45")
+    ' at seconds -> index, id and elapsed, in the loop of three. The wall clock is the same one: 0 is a loop's start.
+    cases = [[0, 0, "current", 0], [14, 0, "current", 14], [15, 1, "today", 0], [29, 1, "today", 14], [30, 2, "week", 0], [44, 2, "week", 14], [45, 0, "current", 0], [50, 0, "current", 5], [60, 1, "today", 0], [90, 0, "current", 0], [1700000000, 2, "week", 5]]
+    for each c in cases
+        at = NxWxScreenAt(c[0], false)
+        NxCheck(r, "loop at " + c[0].ToStr() + " with no radar", at.index.ToStr() + " " + at.id + " " + Int(at.elapsed + 0.5).ToStr(), c[1].ToStr() + " " + c[2] + " " + c[3].ToStr())
+    end for
+    ' The default is the full loop: the golden's.
+    same = true
+    for t = 0 to 129
+        a = NxWxScreenAt(t)
+        b = NxWxScreenAt(t, true)
+        if a.index <> b.index or a.id <> b.id then same = false
+    end for
+    NxCheck(r, "loop: the default is the loop with radar", NxToStr(same), "true")
+    NxCheck(r, "loop: the radar screen is up from second 45 to 65", NxWxScreenAt(45).id + " " + NxWxScreenAt(64).id + " " + NxWxScreenAt(65).id, "radar radar current")
+    ' Which places have radar.
+    NxCheck(r, "radar: the US, Canada and Germany have it", NxToStr(NxWxHasRadar({ cc: "US", lat: 40.0, lon: -80.0 })) + NxToStr(NxWxHasRadar({ cc: "ca", lat: 43.0, lon: -79.0 })) + NxToStr(NxWxHasRadar({ cc: "DE", lat: 52.5, lon: 13.4 })), "truetruetrue")
+    NxCheck(r, "radar: the UK, Australia and a place with no country have none", NxToStr(NxWxHasRadar({ cc: "GB", lat: 51.5, lon: -0.1 })) + NxToStr(NxWxHasRadar({ cc: "AU", lat: -33.9, lon: 151.2 })) + NxToStr(NxWxHasRadar({ lat: 1.0, lon: 1.0 })), "falsefalsefalse")
+    NxCheck(r, "radar: no place yet is the full loop", NxToStr(NxWxHasRadar(invalid)), "true")
+    ' The guide's line before the forecast.
+    NxCheck(r, "guide line with radar", NxWxLoopSummary(true), "Current conditions, today" + Chr(8217) + "s forecast, the 5-day forecast and radar, in a loop.")
+    NxCheck(r, "guide line with no radar", NxWxLoopSummary(false), "Current conditions, today" + Chr(8217) + "s forecast and the 5-day forecast, in a loop.")
+    NxCheck(r, "guide line: the row's default is the full one", NxWxGuideBlocks("", "", "")[0].summary, NxWxLoopSummary(true))
+    NxCheck(r, "guide line: a summary given is kept", NxWxGuideBlocks("X", "Cloudy.", "")[0].summary, "Cloudy.")
 end sub
 
 sub NxWxRelayChecks(r as Object, g as Object)
@@ -449,3 +601,16 @@ function NxWxRawNumbers(raw as String, key as String) as Object
     end while
     return out
 end function
+
+' The fakes for NxWxGetRetrying: the answers in order (the last repeats), and the pauses asked for.
+function NxWxTestGet(address as String, headers as Object, limitMs as Integer) as Object
+    t = GetGlobalAA().nxWxTest
+    code = t.codes[t.codes.Count() - 1]
+    if t.calls < t.codes.Count() then code = t.codes[t.calls]
+    t.calls = t.calls + 1
+    return { code: code, text: "x", headers: {} }
+end function
+
+sub NxWxTestPause(ms as Integer)
+    GetGlobalAA().nxWxTest.pauses.Push(ms)
+end sub

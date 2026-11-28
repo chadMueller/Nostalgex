@@ -114,26 +114,28 @@ console.warn = () => {};
   const item = { title: "Spy Film", type: "movie", genres: ["Action"], duration: 100, tmdbID: 77, ratingKey: "1" };
   check("unenriched item misses SPY GAMES", Boolean(CF.itemPasses({ ...item }, spyGames)), false);
   const items = [item];
-  const n = E.attach(items, new Map([["77", E.parseTMDBResponse({ keywords: { keywords: [{ name: "Espionage" }] } }, "77", null, "movie", NOW)]]));
+  const n = E.attach(items, new Map([["movie:77", E.parseTMDBResponse({ keywords: { keywords: [{ name: "Espionage" }] } }, "77", null, "movie", NOW)]]));
   check("attach count", n, 1);
   check("enriched item passes SPY GAMES", CF.itemPasses(items[0], spyGames).via, "keyword");
   check("enrichedValue reads keywords", CF.enrichedValue(items[0], "keywords"), ["Espionage"]);
 
   const fr = { title: "Amelie", type: "movie", genres: ["Comedy"], duration: 120, tmdbID: 194, ratingKey: "2" };
-  E.attach([fr], new Map([["194", E.fromSupabaseRow({ tmdb_id: "194", media_type: "movie", keywords: ["french cinema"], imdb_rating: 8.3, imdb_votes: 800000 })]]));
+  E.attach([fr], new Map([["movie:194", E.fromSupabaseRow({ tmdb_id: "194", media_type: "movie", keywords: ["french cinema"], imdb_rating: 8.3, imdb_votes: 800000 })]]));
   check("OMDb row passes FOREIGN FILMS", Boolean(CF.itemPasses(fr, foreign)), true);
   const frNoOmdb = { ...fr, enrichment: undefined };
-  E.attach([frNoOmdb], new Map([["194", E.parseTMDBResponse({ keywords: { keywords: [{ name: "french cinema" }] } }, "194", null, "movie", NOW)]]));
+  E.attach([frNoOmdb], new Map([["movie:194", E.parseTMDBResponse({ keywords: { keywords: [{ name: "french cinema" }] } }, "194", null, "movie", NOW)]]));
   check("TMDB-only row still gated by OMDb (as on tvOS)", Boolean(CF.itemPasses(frNoOmdb, foreign)), false);
 }
 
-// ---- workItems: one per TMDB id, first media type wins, junk ids skipped ----
+// ---- workItems: one per TMDB number AND type, junk ids skipped ----
 {
   const w = E.workItems([
-    { tmdbID: 1399, type: "episode" }, { tmdbID: "1399", type: "movie" }, { tmdbID: 603, type: "movie" },
+    { tmdbID: 1399, type: "episode" }, { tmdbID: "1399", type: "movie" }, { tmdbID: 1399, type: "episode" }, { tmdbID: 603, type: "movie" },
     { tmdbID: null }, { tmdbID: "" }, { tmdbID: "12a" }, { tmdbID: "1 OR 1=1" }, null,
   ]);
-  check("workItems dedupe", w, [{ tmdbID: "1399", mediaType: "tv" }, { tmdbID: "603", mediaType: "movie" }]);
+  check("workItems: a show and a film that share a number are two, the same type is one",
+    w, [{ tmdbID: "1399", mediaType: "tv" }, { tmdbID: "1399", mediaType: "movie" }, { tmdbID: "603", mediaType: "movie" }]);
+  check("record keys are type and number", [E.recordKey("tv", "1399"), E.recordKey("movie", 603), E.recordKey("anything", 1)], ["tv:1399", "movie:603", "movie:1"]);
 }
 
 // ---- Supabase batching ----
@@ -239,8 +241,8 @@ function backend() {
   });
   check("e2e: stats", { ...stats, peak: undefined },
     { ids: 5, local: 0, supabase: 1, fetched: 2, misses: 1, failed: 1, upserted: 2 });
-  check("e2e: early rebuild saw the cache hit only", early, ["1"]);
-  check("e2e: records", [...records.keys()].sort(), ["1", "2", "3"]);
+  check("e2e: early rebuild saw the cache hit only", early, ["movie:1"]);
+  check("e2e: records are keyed by type and number", [...records.keys()].sort(), ["movie:1", "movie:2", "tv:3"]);
   check("e2e: attached to every episode", items.filter((i) => i.enrichment).map((i) => i.title), ["A", "B", "Show", "Show"]);
   check("e2e: tv parsed from results", items[2].enrichment.keywords, ["sitcom"]);
   const supa = f.calls.filter((c) => c.url.includes("/rest/v1/"));
@@ -248,8 +250,8 @@ function backend() {
   check("e2e: upsert carries the two fetched", JSON.parse(supa[1].init.body).map((r) => r.tmdb_id).sort(), ["2", "3"]);
   const sent = f.calls.map((c) => c.url).join(" ");
   check("e2e: only TMDB ids sent", /title|Show|Gone|tt\d/.test(sent), false);
-  check("e2e: 404 cached as a miss", cache.rows.get("4").record, null);
-  check("e2e: 429 not cached", cache.rows.has("5"), false);
+  check("e2e: 404 cached as a miss", cache.rows.get("movie:4").record, null);
+  check("e2e: 429 not cached", cache.rows.has("movie:5"), false);
 
   // Reload inside the TTL: nothing leaves the browser except the id that failed.
   const again = library();
@@ -264,6 +266,58 @@ function backend() {
   const f3 = backend();
   await E.enrichLibrary(library(), { config: cfg, fetch: f3, cache, now: () => NOW.getTime() + E.CACHE_TTL_MS + 1 });
   check("expired: Supabase read again", f3.calls[0].url.includes("tmdb_id=in.(1,2,3,4,5)"), true);
+}
+// ---- A film and a show with one number: each is looked up under its own type ----
+{
+  const mixed = () => [
+    { title: "Film", type: "movie", tmdbID: 1399, ratingKey: "f" },
+    { title: "Show", type: "episode", tmdbID: 1399, ratingKey: "e1" },
+    { title: "Show", type: "episode", tmdbID: 1399, ratingKey: "e2" },
+  ];
+  // The shared table answers BOTH rows for the one number (its key is (tmdb_id, media_type)).
+  const both = stubFetch(async (url, init) => {
+    if (url.includes("/rest/v1/") && (!init.method || init.method === "GET")) {
+      return { status: 200, body: [
+        { tmdb_id: "1399", media_type: "movie", keywords: ["a film keyword"], tmdb_genres: ["Drama"] },
+        { tmdb_id: "1399", media_type: "tv", keywords: ["a show keyword"], tmdb_genres: ["Fantasy"] },
+      ] };
+    }
+    return { status: 201, body: null };
+  });
+  const items = mixed();
+  const r = await E.enrichLibrary(items, { config: cfg, fetch: both, cache: E.memoryCache(), now: () => NOW.getTime() });
+  check("film and show: two work items, two records", [r.stats.ids, [...r.records.keys()].sort()], [2, ["movie:1399", "tv:1399"]]);
+  check("film and show: the film gets the film's row, every episode the show's", items.map((i) => i.enrichment.keywords[0]), ["a film keyword", "a show keyword", "a show keyword"]);
+  check("film and show: one Supabase read for the number", both.calls.filter((c) => c.url.includes("/rest/v1/")).map((c) => c.url.split("?")[1]), ["tmdb_id=in.(1399)&select=*"]);
+
+  // Only the film's row is in the shared table: the show is NOT skipped for it, it goes to the relay as tv.
+  const onlyFilm = stubFetch(async (url, init) => {
+    if (url.includes("/rest/v1/") && (!init.method || init.method === "GET")) return { status: 200, body: [{ tmdb_id: "1399", media_type: "movie", keywords: ["a film keyword"] }] };
+    if (url.includes("/rest/v1/")) return { status: 201, body: null };
+    if (url.endsWith("path=tv/1399")) return { status: 200, body: { keywords: { results: [{ name: "from tmdb" }] } } };
+    return { status: 500, body: {} };
+  });
+  const cache = E.memoryCache();
+  const items2 = mixed();
+  const r2 = await E.enrichLibrary(items2, { config: cfg, fetch: onlyFilm, cache, now: () => NOW.getTime() });
+  check("film row stored: the show still asks the relay as tv", onlyFilm.calls.filter((c) => c.url.includes("/api/tmdb")).map((c) => c.url.replace(/^https:\/\/[^/]+/, "")), ["/api/tmdb?path=tv/1399"]);
+  check("film row stored: each type has its own row", items2.map((i) => i.enrichment.keywords[0]), ["a film keyword", "from tmdb", "from tmdb"]);
+  check("film row stored: only the show's fetch is saved back", JSON.parse(onlyFilm.calls.find((c) => c.init && c.init.method === "POST").init.body).map((x) => [x.tmdb_id, x.media_type]), [["1399", "tv"]]);
+  check("film row stored: the local cache holds both under their own keys", [...cache.rows.keys()].sort(), ["movie:1399", "tv:1399"]);
+  // A reload from that cache needs nothing.
+  const quiet = stubFetch(async () => ({ status: 500, body: {} }));
+  const items3 = mixed();
+  const r3 = await E.enrichLibrary(items3, { config: cfg, fetch: quiet, cache, now: () => NOW.getTime() + 1000 });
+  check("both cached: no request, both attached", [quiet.calls.length, r3.stats.local, items3.map((i) => i.enrichment.keywords[0])], [0, 2, ["a film keyword", "from tmdb", "from tmdb"]]);
+  // A row of the wrong type for the number is not used for the other type.
+  const wrong = stubFetch(async (url, init) => {
+    if (url.includes("/rest/v1/") && (!init.method || init.method === "GET")) return { status: 200, body: [{ tmdb_id: "1399", media_type: "movie", keywords: ["film only"] }] };
+    if (url.includes("/rest/v1/")) return { status: 201, body: null };
+    return { status: 404, body: {} };
+  });
+  const showOnly = [{ title: "Show", type: "episode", tmdbID: 1399, ratingKey: "e1" }];
+  await E.enrichLibrary(showOnly, { config: cfg, fetch: wrong, cache: E.memoryCache(), now: () => NOW.getTime() });
+  check("a film's row never stands in for a show with the same number", showOnly[0].enrichment, undefined);
 }
 {
   const f = backend();
@@ -394,15 +448,16 @@ const CHANNELS = [
 
   const rec = (id, extra) => ({ ...E.parseTMDBResponse({}, id, null, "movie", NOW), ...extra });
   const records = new Map([
-    ["1", rec("1", { imdbID: "tt0000001", keywords: ["cult film"] })],
-    ["2", rec("2", { imdbID: "tt0000002", keywords: ["cult film"], imdbRating: 7.1 })],
-    ["3", rec("3", { keywords: ["cult film"] })],
-    ["4", rec("4", { imdbID: "tt0000004", keywords: ["romance"] })],
-    ["5", rec("5", { imdbID: "tt0000005" })],
+    ["movie:1", rec("1", { imdbID: "tt0000001", keywords: ["cult film"] })],
+    ["movie:2", rec("2", { imdbID: "tt0000002", keywords: ["cult film"], imdbRating: 7.1 })],
+    ["movie:3", rec("3", { keywords: ["cult film"] })],
+    ["movie:4", rec("4", { imdbID: "tt0000004", keywords: ["romance"] })],
+    ["movie:5", rec("5", { imdbID: "tt0000005" })],
   ]);
   const work = ["1", "2", "3", "4", "5", "6"].map((tmdbID) => ({ tmdbID, mediaType: "movie" }));
   const byID = E.genresByTMDB([{ tmdbID: 5, genres: ["Horror"] }, { tmdbID: 5, genres: ["Thriller"] }]);
-  check("genresByTMDB merges", [...byID.get("5")], ["Horror", "Thriller"]);
+  check("genresByTMDB merges, by type and number", [...byID.get("movie:5")], ["Horror", "Thriller"]);
+  check("genresByTMDB: a show of the same number is another key", E.genresByTMDB([{ tmdbID: 5, type: "episode", genres: ["Drama"] }, { tmdbID: 5, genres: ["Horror"] }]).get("tv:5") instanceof Set, true);
   check("candidates: unrated, with id, gated (server genre counts)",
     E.omdbCandidates(work, records, byID, E.omdbGates(CHANNELS)).map((c) => c.tmdbID), ["1", "5"]);
 }
