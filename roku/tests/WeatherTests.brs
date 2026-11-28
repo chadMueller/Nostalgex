@@ -128,6 +128,28 @@ function NxRunWeatherTests(goldenPath as String) as Integer
     NxWxRelayChecks(r, g)
     NxWxGuideChecks(r, g)
 
+    ' One retry on a code 0 answer (the first request after the stick has idled), and only on code 0.
+    for each c in [
+        { name: "an answer is taken as it is", codes: [200], calls: 1, code: 200 },
+        { name: "a 404 is not tried again", codes: [404, 200], calls: 1, code: 404 },
+        { name: "a 500 is not tried again", codes: [500, 200], calls: 1, code: 500 },
+        { name: "no answer, then an answer: the second is taken", codes: [0, 200], calls: 2, code: 200 },
+        { name: "no answer twice: one retry only", codes: [0, 0, 200], calls: 2, code: 0 },
+        { name: "no answer, then a 404 stands", codes: [0, 404], calls: 2, code: 404 }
+    ]
+        GetGlobalAA().nxWxTest = { codes: c.codes, calls: 0, pauses: [] }
+        got = NxWxGetRetrying(NxWxTestGet, NxWxTestPause, "https://example.test/weather/places/meta.json", {}, 12000, 500)
+        t = GetGlobalAA().nxWxTest
+        NxCheck(r, "retry: " + c.name, FormatJson([got.code, t.calls, t.pauses.Count()]), FormatJson([c.code, c.calls, c.calls - 1]))
+    end for
+    GetGlobalAA().nxWxTest = { codes: [0, 200], calls: 0, pauses: [] }
+    NxWxGetRetrying(NxWxTestGet, NxWxTestPause, "https://example.test/x", {}, 12000)
+    NxCheck(r, "retry: the pause is short (500 ms unless told)", FormatJson(GetGlobalAA().nxWxTest.pauses), "[500]")
+    ' The search itself: a place file that fails once and then works gives its matches through the loader's retry.
+    GetGlobalAA().nxWxTest = { codes: [0, 200], calls: 0, pauses: [] }
+    NxCheck(r, "retry: a first-read failure then success is one answer", NxToStr(NxWxGetRetrying(NxWxTestGet, NxWxTestPause, "u", {}, 1).text), "x")
+    NxCheck(r, "forecast: no file kept is no forecast, and no error", FormatJson(NxWxReadForecast("none") = invalid), "true")
+
     print "weather: "; r.pass; " passed, "; r.fail; " failed"
     return r.fail
 end function
@@ -580,3 +602,16 @@ function NxWxRawNumbers(raw as String, key as String) as Object
     end while
     return out
 end function
+
+' The fakes for NxWxGetRetrying: the answers in order (the last repeats), and the pauses asked for.
+function NxWxTestGet(address as String, headers as Object, limitMs as Integer) as Object
+    t = GetGlobalAA().nxWxTest
+    code = t.codes[t.codes.Count() - 1]
+    if t.calls < t.codes.Count() then code = t.codes[t.calls]
+    t.calls = t.calls + 1
+    return { code: code, text: "x", headers: {} }
+end function
+
+sub NxWxTestPause(ms as Integer)
+    GetGlobalAA().nxWxTest.pauses.Push(ms)
+end sub
