@@ -245,6 +245,9 @@ class AppState {
     /// sets this, there is nothing to choose, so existing single-library accounts see
     /// no new screen.
     var needsLibrarySelection: Bool = false
+    /// True while a launch is re-reading the libraries to show a choice the viewer still owes (see
+    /// `LibrarySectionSelectionStore.pickOwed`). RootView shows the loading screen, not an empty guide, meanwhile.
+    var isResumingLibraryPick: Bool = false
     /// Sections the library-selection screen is currently showing (onboarding only).
     /// Cleared once CONTINUE commits a choice.
     var pendingLibrarySections: [LibrarySectionRef] = []
@@ -291,6 +294,10 @@ class AppState {
     /// the viewer declined it.
     var seasonalPromptRevision: Int = 0
     var isBackgroundRefreshing: Bool = false
+    /// A live channels.json is being applied (AppState+LiveChannels). Not shown anywhere.
+    @ObservationIgnored var isApplyingLiveRules = false
+    /// The guide is the front screen: not full screen, not under Settings (TunerView tells us).
+    @ObservationIgnored var guideIsOnScreen = false
     var isLibraryStale: Bool = false
     /// Change signature of the library as of the last full scan; nil when unknown.
     var librarySignature: String?
@@ -607,6 +614,20 @@ class AppState {
             if oldValue != guideTextSize {
                 Analytics.track(.settingChanged(key: "guide_text_size", value: guideTextSize.rawValue))
             }
+        }
+    }
+
+    /// EPISODE ORDER (I-103), in CHANNELS & BUNDLES. A change packs today again under the new order (the order is in
+    /// the day's fingerprint); the programme playing now carries on to its end.
+    var episodeOrder: EpisodeOrder = EpisodeOrder.current {
+        didSet {
+            guard oldValue != episodeOrder else { return }
+            EpisodeOrder.current = episodeOrder
+            Analytics.track(.settingChanged(key: "episode_order", value: episodeOrder.rawValue))
+            DailyManifestScheduler.invalidateMemo()
+            // The guide reads its rows from the scheduler; reassigning the lineup makes it read them again.
+            let lineup = channels
+            channels = lineup
         }
     }
 

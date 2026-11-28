@@ -35,6 +35,22 @@ enum WeatherEngine {
     ]
     static let loopSeconds: Double = screens.reduce(0) { $0 + $1.seconds }
 
+    /// The loop for a place: every screen, or without the radar when the place has no radar coverage, so the loop
+    /// is only screens that carry data and is 45 seconds long instead of 65.
+    static func activeScreens(hasRadar: Bool) -> [Screen] {
+        hasRadar ? screens : screens.filter { $0.id != "radar" }
+    }
+
+    static func loopSeconds(hasRadar: Bool) -> Double {
+        hasRadar ? loopSeconds : activeScreens(hasRadar: false).reduce(0) { $0 + $1.seconds }
+    }
+
+    /// Whether the radar screen is part of the loop for this place: only where `radarProvider` has a source.
+    static func hasRadar(_ place: Place?) -> Bool {
+        guard let place else { return true }
+        return radarProvider(cc: place.cc, lat: place.lat, lon: place.lon) != nil
+    }
+
     struct ScreenAt: Equatable {
         let index: Int
         let screen: Screen
@@ -42,14 +58,16 @@ enum WeatherEngine {
         let remaining: Double
     }
 
-    /// Which screen is up at `nowMs` and how far into it.
-    static func screenAt(_ nowMs: Double) -> ScreenAt {
-        var t = jsMod(jsMod(nowMs / 1000, loopSeconds) + loopSeconds, loopSeconds)
-        for (i, s) in screens.enumerated() {
+    /// Which screen is up at `nowMs` and how far into it. `index` counts within the loop that is playing.
+    static func screenAt(_ nowMs: Double, hasRadar: Bool = true) -> ScreenAt {
+        let list = activeScreens(hasRadar: hasRadar)
+        let total = loopSeconds(hasRadar: hasRadar)
+        var t = jsMod(jsMod(nowMs / 1000, total) + total, total)
+        for (i, s) in list.enumerated() {
             if t < s.seconds { return ScreenAt(index: i, screen: s, elapsed: t, remaining: s.seconds - t) }
             t -= s.seconds
         }
-        return ScreenAt(index: 0, screen: screens[0], elapsed: 0, remaining: screens[0].seconds)
+        return ScreenAt(index: 0, screen: list[0], elapsed: 0, remaining: list[0].seconds)
     }
 
     // MARK: Numbers the JavaScript way
@@ -517,7 +535,7 @@ enum WeatherEngine {
         return "conus"
     }
 
-    /// The radar source for a place, or nil: the card says RADAR NOT AVAILABLE IN YOUR AREA.
+    /// The radar source for a place, or nil: the loop then has no radar screen (`activeScreens(hasRadar:)`).
     static func radarProvider(cc: String?, lat: Double, lon: Double) -> RadarProvider? {
         switch (cc ?? "").uppercased() {
         case "US":
@@ -730,23 +748,64 @@ enum WeatherEngine {
 }
 
 /// A place finder over the static GeoNames place files (built by `scripts/build-weather-data.mjs`, served
-/// from nostalgex.app/weather/places/). `load(path)` returns the parsed JSON of a path under `weather/`
-/// (for example "places/meta.json") as bytes, or nil when there is no such file.
+/// from nostalgex.app/weather/places/). A fetch returns the bytes of a path under `weather/` (for example
+/// "places/meta.json"), `.notFound` for a file that does not exist, or `.failed` when it could not be read.
 actor WeatherPlaceIndex {
+    enum Fetched: Sendable {
+        case data(Data)
+        /// The server said there is no such file (a postcode shard that does not exist). Remembered.
+        case notFound
+        /// No answer: offline, a timeout, a server error. Never remembered, the next search asks again.
+        case failed
+    }
+    typealias Fetch = @Sendable (String) async -> Fetched
+    /// The simple form: bytes, or nil for any failure. A nil is never remembered.
     typealias Loader = @Sendable (String) async -> Data?
-    private let load: Loader
+
+    private let fetch: Fetch
     private var cache: [String: Any] = [:]
     private var missing: Set<String> = []
-    static let maxResults = 8
+    /// A fetch under way, shared by every search that needs the file. It runs in a task of its own, so a search that
+    /// is cancelled (the viewer typed another letter) does not cancel the fetch the next search is waiting on.
+    private var inFlight: [String: (id: Int, task: Task<Fetched, Never>)] = [:]
+    private var nextFetchID = 0
+    /// How many matches a search returns, whole postcodes first. The picker scrolls.
+    static let maxResults = 36
 
-    init(load: @escaping Loader) { self.load = load }
+    init(fetch: @escaping Fetch) { self.fetch = fetch }
+
+    init(load: @escaping Loader) {
+        self.fetch = { path in
+            if let data = await load(path) { return .data(data) }
+            return .failed
+        }
+    }
 
     private func file(_ path: String) async -> Any? {
         if let hit = cache[path] { return hit }
         if missing.contains(path) { return nil }
-        let value = await load(path).flatMap { try? JSONSerialization.jsonObject(with: $0) }
-        if let value { cache[path] = value } else { missing.insert(path) }
-        return value
+        let entry: (id: Int, task: Task<Fetched, Never>)
+        if let running = inFlight[path] {
+            entry = running
+        } else {
+            nextFetchID += 1
+            let fetch = self.fetch
+            entry = (nextFetchID, Task { await fetch(path) })
+            inFlight[path] = entry
+        }
+        let outcome = await entry.task.value
+        if inFlight[path]?.id == entry.id { inFlight[path] = nil }
+        switch outcome {
+        case .data(let data):
+            guard let value = try? JSONSerialization.jsonObject(with: data) else { return nil }
+            cache[path] = value
+            return value
+        case .notFound:
+            missing.insert(path)
+            return nil
+        case .failed:
+            return nil
+        }
     }
 
     struct Result: Equatable {

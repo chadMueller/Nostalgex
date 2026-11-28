@@ -25,7 +25,9 @@ enum DailyManifestStore {
     /// 3: a programme's slot is its real runtime in seconds, the day starts when the programme running over midnight
     /// from yesterday ends, and the filler loop no longer cuts or shortens a block at midnight (#315). A day stored at
     /// 2 has minute slots and is packed again once.
-    static let schemaVersion = 3
+    /// 4: CLASSIC RERUNS airs two consecutive episodes of a show, not any two (EPISODE ORDER, I-103). A day stored at
+    /// 3 is packed again once.
+    static let schemaVersion = 4
     private static let encoder: JSONEncoder = {
         let e = JSONEncoder()
         e.outputFormatting = [.sortedKeys]
@@ -39,7 +41,9 @@ enum DailyManifestStore {
     /// runtimes to the same keys. Without the slot in the fingerprint that day would stay at minute slots, and a file
     /// would run past its slot until midnight.
     static func poolFingerprint(items: [PlexMediaItem]) -> String {
-        let sorted = items.map { "\($0.id)@\($0.slotSeconds)" }.sorted().joined(separator: ",")
+        // EPISODE ORDER (I-103) is part of it: a day packed under another order is packed again. CLASSIC RERUNS
+        // adds nothing, so every day stored before the setting existed still matches.
+        let sorted = items.map { "\($0.id)@\($0.slotSeconds)" }.sorted().joined(separator: ",") + EpisodeOrder.current.fingerprintSuffix
         let digest = SHA256.hash(data: Data(sorted.utf8))
         return digest.map { String(format: "%02x", $0) }.joined()
     }

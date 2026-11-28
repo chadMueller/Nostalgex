@@ -89,6 +89,22 @@ enum AnalyticsLaunchKind: String, Sendable {
     case returning
 }
 
+/// Which of the three tips a tip signal is about. The tier only: never a count, a price
+/// or a total.
+enum AnalyticsTipTier: String, Sendable {
+    case popcorn
+    case tvDinner
+    case pizzaNight
+
+    var wireValue: String {
+        switch self {
+        case .popcorn: return "popcorn"
+        case .tvDinner: return "tv_dinner"
+        case .pizzaNight: return "pizza_night"
+        }
+    }
+}
+
 // MARK: - Event catalog
 
 /// Every signal the app can send. Closed enum on purpose so the wrapper is the only
@@ -233,6 +249,20 @@ enum AnalyticsEvent: Sendable {
     /// in demo mode. The scan happens on a phone, so signups are counted on the website.
     case signupQRShown(backend: AnalyticsBackend)
 
+    // MARK: Tip jar
+    //
+    // The tier is the only parameter. No quantity, price, total, currency or transaction id.
+
+    /// The viewer confirmed a tip and the App Store sheet was asked for.
+    case tipStarted(tier: AnalyticsTipTier)
+
+    /// A verified tip was thanked. At most once per transaction.
+    case tipCompleted(tier: AnalyticsTipTier)
+
+    /// A tip the viewer started did not go through (the store refused it or it failed
+    /// verification). A cancel or a wait for approval is not a failure and sends nothing.
+    case tipFailed(tier: AnalyticsTipTier)
+
     // MARK: Session length
 
     /// Fires once every time the app moves to the background, carrying the
@@ -284,6 +314,9 @@ enum AnalyticsEvent: Sendable {
         case .ratingNudgeOpened: return "rating_nudge.opened"
         case .rateOpened: return "rate.opened"
         case .signupQRShown: return "signup.qr.shown"
+        case .tipStarted: return "tip.started"
+        case .tipCompleted: return "tip.completed"
+        case .tipFailed: return "tip.failed"
         case .sessionEnded: return "app.session.ended"
         }
     }
@@ -411,6 +444,9 @@ enum AnalyticsEvent: Sendable {
 
         case .signupQRShown(let backend):
             return ["placement": "settings", "backend": backend.rawValue]
+
+        case .tipStarted(let tier), .tipCompleted(let tier), .tipFailed(let tier):
+            return ["tier": tier.wireValue]
 
         case .sessionEnded(_, let summary):
             // activeSeconds rides as `floatValue`, matching playback.stopped.

@@ -231,7 +231,7 @@ enum WeatherScreens {
     static let creditLine: CGFloat = 22
     static let creditColor = rgb(0xB9C3DE, 0.7)
 
-    static func footer(_ gc: GraphicsContext, _ st: State, screenIndex: Int, extraCredit: String?) {
+    static func footer(_ gc: GraphicsContext, _ st: State, screens: [WeatherEngine.Screen], screenIndex: Int, extraCredit: String?) {
         let x = safeX
         let base = H - safeY - 6
         var lines = ["DATA FROM MET NORWAY"]
@@ -245,12 +245,12 @@ enum WeatherScreens {
             text(gc, l, x, y, .mono, creditSize, creditColor)
             y += creditLine
         }
-        let pips = WeatherEngine.screens.count
+        let pips = screens.count
         let pw: CGFloat = 44, gap: CGFloat = 10
         let pipsW = CGFloat(pips) * pw + CGFloat(pips - 1) * gap
         var px = W - safeX - pipsW
         for i in 0..<pips {
-            fillRect(gc, CGRect(x: px, y: base - 12, width: pw, height: 10), i == screenIndex ? accent(WeatherEngine.screens[i].id) : outline)
+            fillRect(gc, CGRect(x: px, y: base - 12, width: pw, height: 10), i == screenIndex ? accent(screens[i].id) : outline)
             px += pw + gap
         }
     }
@@ -365,10 +365,8 @@ enum WeatherScreens {
     static func screenRadar(_ gc: GraphicsContext, _ st: State, _ place: WeatherEngine.Place, elapsedMs: Double) -> String? {
         fillRect(gc, map, rgb(0x070C18))
         let credit = st.radarProvider?.credit
-        if WeatherEngine.radarProvider(cc: place.cc, lat: place.lat, lon: place.lon) == nil {
-            message(gc, title: "RADAR NOT AVAILABLE IN YOUR AREA", sub: "RADAR COVERS THE UNITED STATES, CANADA AND GERMANY", color: amber)
-            return nil
-        }
+        // The loop has no radar screen where there is no coverage (`WeatherEngine.hasRadar`), so there is no slide for it.
+        guard WeatherEngine.hasRadar(place) else { return nil }
         let frames = st.radarFrames
         if frames.isEmpty {
             if st.radarStatus == .error {
@@ -458,7 +456,8 @@ enum WeatherScreens {
     static func render(_ outer: GraphicsContext, size: CGSize, state st: State) {
         var gc = outer
         gc.scaleBy(x: size.width / W, y: size.height / H)
-        let at = WeatherEngine.screenAt(st.nowMs)
+        let hasRadar = WeatherEngine.hasRadar(st.place)
+        let at = WeatherEngine.screenAt(st.nowMs, hasRadar: hasRadar)
         let screen = at.screen
         gc.fill(Path(CGRect(x: 0, y: 0, width: W, height: H)),
                 with: .linearGradient(Gradient(colors: [bg0, bg1]), startPoint: .zero, endPoint: CGPoint(x: W, y: H)))
@@ -479,7 +478,7 @@ enum WeatherScreens {
         } else {
             message(gc, title: "LOADING THE FORECAST", sub: nil, color: cyan)
         }
-        footer(gc, st, screenIndex: at.index, extraCredit: screen.id == "radar" && hasData ? extra : nil)
+        footer(gc, st, screens: WeatherEngine.activeScreens(hasRadar: hasRadar), screenIndex: at.index, extraCredit: screen.id == "radar" && hasData ? extra : nil)
         // The change between screens: a quick wipe from the left.
         let wipe = 0.4
         if at.elapsed < wipe {

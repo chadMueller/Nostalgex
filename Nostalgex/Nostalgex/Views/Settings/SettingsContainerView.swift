@@ -180,6 +180,10 @@ struct SettingsContainerView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .overlay(alignment: .bottom) {
+            // The loading pattern, in Settings (the viewer is not sent back to the guide to see it).
+            if selected == .servers || selected == .channels { SettingsLoadStatusBar() }
+        }
     }
 
     /// Scrolls the row that took focus to the centre of the pane.

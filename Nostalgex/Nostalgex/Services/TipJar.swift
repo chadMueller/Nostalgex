@@ -7,7 +7,8 @@ import StoreKit
 // Three consumable tips under SUPPORT NOSTALGEX. A tip unlocks nothing. The only thing
 // kept on disk is the list of transaction ids already thanked, so an Ask to Buy approval
 // that also arrives through Transaction.updates never shows the thank-you card twice.
-// No analytics: tips stay off the privacy label.
+// Analytics: three signals (tip started, completed, failed) that carry the tip tier and
+// nothing else. No quantity, price, total or transaction id.
 
 /// The three tip products, in the order they should appear when prices tie.
 enum TipProduct: String, CaseIterable {
@@ -33,6 +34,14 @@ enum TipProduct: String, CaseIterable {
         case .popcorn: return "popcorns"
         case .tvDinner: return "TV dinners"
         case .pizzaNight: return "pizza nights"
+        }
+    }
+
+    var analyticsTier: AnalyticsTipTier {
+        switch self {
+        case .popcorn: return .popcorn
+        case .tvDinner: return .tvDinner
+        case .pizzaNight: return .pizzaNight
         }
     }
 
@@ -129,6 +138,17 @@ enum TipJarLogic {
         case .pending: return pendingLine
         case .failed: return failedLine
         case .none, .thanks: return nil
+        }
+    }
+
+    /// The signal for a purchase outcome, or nil when there is nothing to count: a cancel,
+    /// a wait for approval, a transaction already thanked, or an unknown product.
+    static func analyticsEvent(for outcome: TipOutcome, tip: TipProduct?) -> AnalyticsEvent? {
+        guard let tip else { return nil }
+        switch outcome {
+        case .thanks: return .tipCompleted(tier: tip.analyticsTier)
+        case .failed: return .tipFailed(tier: tip.analyticsTier)
+        case .none, .pending: return nil
         }
     }
 
@@ -255,21 +275,23 @@ final class TipJar {
         defer { isPurchasing = false }
 
         let quantity = TipJarLogic.clampQuantity(quantity)
+        let tip = TipProduct(rawValue: product.id)
+        if let tip { Analytics.track(.tipStarted(tier: tip.analyticsTier)) }
         do {
             let result = try await product.purchase(options: [.quantity(quantity)])
             switch result {
             case .success(let verification):
                 await handle(verification, fromPurchase: true)
             case .userCancelled:
-                apply(TipJarLogic.resolve(.userCancelled, alreadyThanked: ledger.asSet))
+                apply(TipJarLogic.resolve(.userCancelled, alreadyThanked: ledger.asSet), tip: tip)
             case .pending:
-                apply(TipJarLogic.resolve(.pending, alreadyThanked: ledger.asSet))
+                apply(TipJarLogic.resolve(.pending, alreadyThanked: ledger.asSet), tip: tip)
             @unknown default:
-                apply(TipJarLogic.resolve(.failed, alreadyThanked: ledger.asSet))
+                apply(TipJarLogic.resolve(.failed, alreadyThanked: ledger.asSet), tip: tip)
             }
         } catch {
             print("[Nostalgex] Tip purchase failed: \(error.localizedDescription)")
-            apply(TipJarLogic.resolve(.failed, alreadyThanked: ledger.asSet))
+            apply(TipJarLogic.resolve(.failed, alreadyThanked: ledger.asSet), tip: tip)
         }
     }
 
@@ -306,6 +328,10 @@ final class TipJar {
         apply(resolution, tip: tip, quantity: transaction.purchasedQuantity)
     }
 
+    private func track(_ outcome: TipOutcome, tip: TipProduct?) {
+        if let event = TipJarLogic.analyticsEvent(for: outcome, tip: tip) { Analytics.track(event) }
+    }
+
     private func apply(_ resolution: TipResolution, tip: TipProduct? = nil, quantity: Int = 1) {
         if resolution.outcome == .thanks, let id = resolution.transactionToFinish {
             if ledger.recordThanks(for: id) {
@@ -314,10 +340,12 @@ final class TipJar {
                 thanksTip = tip
                 thanksQuantity = max(quantity, 1)
                 showThanks = true
+                track(resolution.outcome, tip: tip)
             }
             return
         }
         if resolution.outcome == .none { return }
+        track(resolution.outcome, tip: tip)
         statusLine = TipJarLogic.statusLine(for: resolution.outcome)
     }
 }

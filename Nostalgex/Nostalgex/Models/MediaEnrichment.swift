@@ -117,3 +117,23 @@ struct MediaEnrichment: Codable, Sendable {
         )
     }
 }
+
+// MARK: - The key a row is kept and looked up by
+
+extension MediaEnrichment {
+    /// "movie:603" or "tv:603". TMDB numbers films and shows separately, so the number
+    /// alone does not name a title, and the shared table's key is the number plus the type.
+    static func cacheKey(mediaType: String, tmdbID: String) -> String { "\(mediaType):\(tmdbID)" }
+
+    var cacheKey: String { Self.cacheKey(mediaType: mediaType, tmdbID: tmdbID) }
+}
+
+extension PlexMediaItem {
+    /// The type TMDB files this item under: an episode's number is its show's.
+    var enrichmentMediaType: String { type == .episode ? "tv" : "movie" }
+
+    /// The key of this item's enrichment row, or nil with no TMDB number.
+    var enrichmentKey: String? {
+        tmdbID.map { MediaEnrichment.cacheKey(mediaType: enrichmentMediaType, tmdbID: $0) }
+    }
+}

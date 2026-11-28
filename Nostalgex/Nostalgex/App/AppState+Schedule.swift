@@ -22,8 +22,9 @@ extension AppState {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(900)) // check every 15 min
                 guard !Task.isCancelled else { break }
-                // Live channel rules (N-074): about once a day, the file only. The next rebuild uses it.
-                if ChannelConfigStore.isDue() { await ChannelConfigStore.refresh() }
+                // Live channel rules (N-074): a check at most once in `ChannelConfigStore.checkInterval`, and a newer
+                // copy applied if this is a safe point (AppState+LiveChannels).
+                await self?.checkLiveChannelRules()
                 let now = Int(Date().timeIntervalSince1970)
                 let lastLoad = self?.lastLoadAtUnix ?? 0
                 let lastCheck = self?.lastLibraryCheckAtUnix ?? 0

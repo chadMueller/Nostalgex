@@ -18,7 +18,10 @@ enum ChannelConfigStore {
     static let liveURL = URL(string: "https://www.nostalgex.app/channels.json")!
     /// The newest channels.json format this build reads.
     static let maxFormatVersion = 1
-    static let refreshAfter: TimeInterval = 24 * 3600
+    /// How soon a new channels.json can be noticed: the check runs at launch, on return to the foreground and from the
+    /// 15 minute background loop, but never more than once in this long. An unchanged file is a 304 (ETag), so the
+    /// check itself costs almost nothing. The one number to change (Chad, 2026-11-16: "sooner than 24 hours").
+    static let checkInterval: TimeInterval = 3600
     /// A background refresh (a kept copy exists, nothing waits on it).
     static let timeout: TimeInterval = 10
     /// A fetch the launch waits on, because there is no kept copy yet (a first install): short, so a slow or
@@ -26,6 +29,7 @@ enum ChannelConfigStore {
     static let blockingTimeout: TimeInterval = 3
     static let lastFetchKey = "nostalgex_live_config_fetched_at"
     static let etagKey = "nostalgex_live_config_etag"
+    static let appliedVersionKey = "nostalgex_channels_applied_version"
 
     static var cacheURL: URL? { LocalStore.rootDirectory?.appendingPathComponent("channels-live.json") }
 
@@ -80,6 +84,8 @@ enum ChannelConfigStore {
         let data: Data?
         /// "live" or "bundled", for the log.
         let source: String
+        /// The content `version` of what the guide is built from.
+        var version: Int { ChannelConfigStore.version(of: data) }
     }
 
     /// The config the guide is built from: the kept live copy when it still passes, else the bundled one.
@@ -96,12 +102,31 @@ enum ChannelConfigStore {
         return Active(result: ChannelConfigResult(channels: [], bundles: [], exclusiveRules: []), data: nil, source: "none")
     }
 
-    /// The kept copy is missing or older than a day.
+    /// The kept copy is missing, or the last check was `checkInterval` ago or more.
     static func isDue(now: Date = Date(), defaults: UserDefaults = AppDefaults.standard) -> Bool {
-        let last = defaults.double(forKey: lastFetchKey)
         let cachedExists = cacheURL.map { FileManager.default.fileExists(atPath: $0.path) } ?? false
-        return !cachedExists || last <= 0 || now.timeIntervalSince1970 - last >= refreshAfter
+        return isCheckDue(lastCheck: defaults.double(forKey: lastFetchKey), keptCopyExists: cachedExists, now: now)
     }
+
+    static func isCheckDue(lastCheck: TimeInterval, keptCopyExists: Bool, now: Date) -> Bool {
+        !keptCopyExists || lastCheck <= 0 || now.timeIntervalSince1970 - lastCheck >= checkInterval
+    }
+
+    /// The version the guide in memory was last built from. Never stored on an install that predates this: then it is
+    /// the bundled copy's, so an app update with newer bundled rules does not force a rebuild, and a live copy newer
+    /// than the bundled one is applied once.
+    static func appliedVersion(defaults: UserDefaults = AppDefaults.standard, bundledVersion: Int) -> Int {
+        let v = defaults.integer(forKey: appliedVersionKey)
+        return v > 0 ? v : bundledVersion
+    }
+
+    static func recordApplied(version: Int, defaults: UserDefaults = AppDefaults.standard) {
+        defaults.set(version, forKey: appliedVersionKey)
+    }
+
+    /// A check already running (a launch and a foreground return can land together).
+    private static let inFlight = NSLock()
+    nonisolated(unsafe) private static var checking = false
 
     /// What a finished download does to the kept copy: a passing file replaces it, anything else leaves it.
     /// Returns the verdict for the log and the tests.
@@ -127,6 +152,11 @@ enum ChannelConfigStore {
     /// a kept copy exists to go with it, and kept only for a copy that passed.
     static func refresh(session: URLSession = .shared, timeout: TimeInterval = ChannelConfigStore.timeout) async {
         guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else { return }
+        inFlight.lock()
+        if checking { inFlight.unlock(); return }
+        checking = true
+        inFlight.unlock()
+        defer { inFlight.lock(); checking = false; inFlight.unlock() }
         let keptCopyExists = cacheURL.map { FileManager.default.fileExists(atPath: $0.path) } ?? false
         let etag = keptCopyExists ? AppDefaults.standard.string(forKey: etagKey) : nil
         do {
@@ -147,6 +177,8 @@ enum ChannelConfigStore {
             }
             print("[Plex90] CONFIG: live channels.json \(v)")
         } catch {
+            // Offline or slow: the next check is an hour away, not at the next foreground return.
+            AppDefaults.standard.set(Date().timeIntervalSince1970, forKey: lastFetchKey)
             print("[Plex90] CONFIG: live channels.json failed: \(error.localizedDescription), keeping what we have")
         }
     }

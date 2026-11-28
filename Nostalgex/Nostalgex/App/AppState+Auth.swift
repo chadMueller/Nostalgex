@@ -226,12 +226,20 @@ extension AppState {
     /// Settings-time choice from here on, not something carried in from whatever was
     /// last connected on this device.
     func presentLibrarySelectionOrScan() async {
-        deselectedLibrarySectionKeys = []
-        LibrarySectionSelectionStore.save(deselectedLibrarySectionKeys)
-        includedHiddenLibrarySectionKeys = []
-        LibrarySectionSelectionStore.saveIncludedHidden(includedHiddenLibrarySectionKeys)
+        // Owed from here: the sign-in is already saved, so a relaunch before the choice is made must come back here.
+        LibrarySectionSelectionStore.pickOwed = true
+        // A relaunch that resumes an owed pick is not a new sign-in: whatever is saved stays (a viewer may have
+        // set libraries in Settings after a relaunch that could not read the list).
+        if !isResumingLibraryPick {
+            deselectedLibrarySectionKeys = []
+            LibrarySectionSelectionStore.save(deselectedLibrarySectionKeys)
+            includedHiddenLibrarySectionKeys = []
+            LibrarySectionSelectionStore.saveIncludedHidden(includedHiddenLibrarySectionKeys)
+        }
 
         let sections = await loadAllLibrarySections()
+        // START OVER or a disconnect while the libraries were being read: nothing is signed in to choose for.
+        guard hasCredentials else { return }
         availableLibrarySections = sections
 
         // A hidden library is always worth a screen, even alone: it starts off, so without the
@@ -241,6 +249,8 @@ extension AppState {
             // loadLibrary will raise its own connection error if the server is
             // genuinely unreachable, so a transient read failure here shouldn't block
             // the user on a screen with nothing on it).
+            // A relaunch that could not read the sections at all keeps the choice owed for the next one.
+            if !sections.isEmpty || !isResumingLibraryPick { LibrarySectionSelectionStore.pickOwed = false }
             await loadLibrary()
             return
         }
@@ -292,7 +302,25 @@ extension AppState {
         ))
         needsLibrarySelection = false
         pendingLibrarySections = []
+        LibrarySectionSelectionStore.pickOwed = false
         Task { await loadLibrary() }
+    }
+
+    /// Launch, after the saved sign-in is read: a sign-in that ended at CHOOSE YOUR LIBRARIES (the app was closed
+    /// there) still owes the viewer that choice. Reads the libraries again and shows the picker, or scans when there
+    /// is nothing left to choose. Returns true when it took over the launch.
+    func resumeLibraryPickIfOwed() async -> Bool {
+        guard hasCredentials, LibrarySectionSelectionStore.pickOwed else { return false }
+        isResumingLibraryPick = true
+        // A headline puts the step rail and START OVER up straight away. With none, LoadingScreenMode shows the bare
+        // logo, and an unreachable server (60 s for Emby and Jellyfin) would leave no way out.
+        loadingMessage = "FINDING YOUR SERVERS..."
+        defer {
+            isResumingLibraryPick = false
+            loadingMessage = ""
+        }
+        await presentLibrarySelectionOrScan()
+        return true
     }
 
     /// The one place a Plex sign-in is committed. Selecting servers used to be the only
@@ -425,6 +453,8 @@ extension AppState {
             else { deselectedLibrarySectionKeys.remove(section.id) }
             LibrarySectionSelectionStore.save(deselectedLibrarySectionKeys)
         }
+        // A choice made in Settings is the choice: the picker is no longer owed at the next launch.
+        LibrarySectionSelectionStore.pickOwed = false
         Analytics.track(.settingChanged(key: "library_section", value: wasOn ? "false" : "true"))
         LibrarySnapshotStore.clear()
         // A different set of libraries is a different library: a scan already running (an
@@ -493,6 +523,7 @@ extension AppState {
         credentialStore.delete(key: Self.serversKey)
         credentialStore.delete(key: Self.backendKindKey)
         credentialStore.delete(key: Self.jellyfinUserIdKey)
+        LibrarySectionSelectionStore.pickOwed = false
         serverURL = ""
         token = ""
         serverName = ""

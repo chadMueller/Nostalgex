@@ -37,6 +37,8 @@ struct RootView: View {
                     LoadingView()
                 } else if !appState.hasCredentials {
                     SettingsView()
+                } else if appState.isResumingLibraryPick {
+                    LoadingView()
                 } else if appState.isHoldingAfterUnfinishedLoads {
                     UnfinishedLoadsView {
                         appState.isHoldingAfterUnfinishedLoads = false
@@ -63,6 +65,10 @@ struct RootView: View {
         .fullScreenCover(isPresented: Bindable(appState).isFullScreen) {
             PlayerView()
                 .environment(appState)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+            // Live channel rules (N-074): a check on return to the foreground, at most once an hour.
+            Task { await appState.checkLiveChannelRules() }
         }
         .onChange(of: appState.keepsScreenAwake, initial: true) { _, keep in
             // tvOS's screensaver and sleep timer, held while video plays and while the viewer
@@ -111,6 +117,8 @@ struct RootView: View {
             }
             InstallDiagnostics.recordLaunch()
             await appState.hydrateCredentialsWithRetry()
+            // Closed on CHOOSE YOUR LIBRARIES last time: the choice is still owed, so no scan yet.
+            if await appState.resumeLibraryPickIfOwed() { return }
             if appState.hasCredentials && appState.channels.isEmpty && LaunchGuard.shouldAskBeforeLoading() {
                 appState.isHoldingAfterUnfinishedLoads = true
                 return
@@ -146,6 +154,9 @@ struct RootView: View {
             if restored, appState.isLibraryStale {
                 Task { await appState.refreshLibraryIfChanged() }
             }
+            // Live channel rules (N-074): a check at launch; a newer copy than the snapshot's guide is applied now,
+            // before anything plays.
+            if restored { Task { await appState.checkLiveChannelRules(atLaunch: true) } }
             appState.startDailyRefresh()
         }
     }

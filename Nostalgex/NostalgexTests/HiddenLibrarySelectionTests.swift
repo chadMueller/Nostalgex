@@ -12,6 +12,13 @@ import XCTest
 @MainActor
 final class HiddenLibrarySelectionTests: XCTestCase {
 
+    /// A test that ends on the picker leaves the choice owed in the host app's real defaults, and the next launch
+    /// there would show the picker and reset the viewer's deselections.
+    override func tearDown() {
+        AppDefaults.standard.removeObject(forKey: "nostalgex_library_pick_owed")
+        super.tearDown()
+    }
+
     private final class InMemoryStore: Nostalgex.CredentialStoring, @unchecked Sendable {
         var values: [String: String] = [:]
         @discardableResult func save(key: String, value: String) -> Bool { values[key] = value; return true }

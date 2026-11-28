@@ -175,11 +175,11 @@ final class OMDBRelayTests: XCTestCase {
             OMDBWorkItem(tmdbID: "6", imdbID: "tt0000006", mediaType: "movie", genres: []),
         ]
         let rows: [String: MediaEnrichment] = [
-            "1": row("1", keywords: ["cult film"]),                         // candidate
-            "2": row("2", keywords: ["cult film"], rating: 7.1),            // already rated
-            "3": row("3", keywords: ["cult film"]),                         // no IMDb id anywhere
-            "4": row("4", imdbID: "tt0000004", keywords: ["cult film"]),    // id from TMDB row
-            "5": row("5", keywords: ["romance"]),                           // no gate admits it
+            "movie:1": row("1", keywords: ["cult film"]),                         // candidate
+            "movie:2": row("2", keywords: ["cult film"], rating: 7.1),            // already rated
+            "movie:3": row("3", keywords: ["cult film"]),                         // no IMDb id anywhere
+            "movie:4": row("4", imdbID: "tt0000004", keywords: ["cult film"]),    // id from TMDB row
+            "movie:5": row("5", keywords: ["romance"]),                           // no gate admits it
             // 6: no TMDB row at all
         ]
         let picked = EnrichmentService.omdbCandidates(work: work, enrichments: rows, gates: gates)
@@ -193,7 +193,7 @@ final class OMDBRelayTests: XCTestCase {
         horrorCult.genres = GenreRules(include: ["horror"])
         let gates = OMDBGate.gates(from: [horrorCult])
         let work = [OMDBWorkItem(tmdbID: "9", imdbID: "tt0000009", mediaType: "movie", genres: ["Horror"])]
-        let picked = EnrichmentService.omdbCandidates(work: work, enrichments: ["9": row("9")], gates: gates)
+        let picked = EnrichmentService.omdbCandidates(work: work, enrichments: ["movie:9": row("9")], gates: gates)
         XCTAssertEqual(picked.map(\.tmdbID), ["9"])
     }
 

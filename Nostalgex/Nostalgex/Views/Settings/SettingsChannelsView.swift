@@ -109,6 +109,19 @@ private struct ChannelsHomePage: View {
             link(.weather, value: SettingsWeatherSection.statusValue(WeatherController.shared))
 
             SettingsToggleRow(
+                title: "EPISODE ORDER",
+                subtitle: appState.episodeOrder.explanation,
+                detail: appState.episodeOrder.title,
+                isOn: true,
+                isFocused: isFocused("episode_order"),
+                showToggle: false
+            ) {
+                appState.episodeOrder = appState.episodeOrder.next
+            }
+            .settingsRow("episode_order", focus: focus)
+            .accessibilityValue(appState.episodeOrder.title)
+
+            SettingsToggleRow(
                 title: "WATERSHED",
                 subtitle: "18 and R-rated titles wait until 9 PM",
                 isOn: appState.watershedEnabled,

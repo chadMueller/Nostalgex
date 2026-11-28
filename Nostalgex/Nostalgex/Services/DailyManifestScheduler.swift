@@ -160,7 +160,7 @@ enum DailyManifestScheduler {
             String(pool.count),
             pool.first?.id ?? "",
             pool.last?.id ?? ""
-        ].joined(separator: "|")
+        ].joined(separator: "|") + EpisodeOrder.current.fingerprintSuffix
     }
 
     static func blocks(
@@ -412,7 +412,8 @@ enum DailyManifestScheduler {
     /// something else to try), else the one that overlaps least (the earliest of those).
     /// `playSeconds(i)` is how long candidate i would run from `t`. `avoidKey` (the title that
     /// just played here) is passed over while there is anything else, and a later part of a
-    /// story never goes ahead of an earlier one waiting before it. With no occupancy, or
+    /// story never goes ahead of an earlier one waiting before it; with `keepingShowOrder` (CLASSIC RERUNS) the
+    /// same holds for the episodes of a show. With no occupancy, or
     /// nothing on elsewhere, this is always 0: the channel's own order. Mirrors
     /// `pickCandidate` in scripts/nostalgex-daily-manifest.js.
     static func pickCandidate(
@@ -423,7 +424,9 @@ enum DailyManifestScheduler {
         channelId: Int,
         avoidKey: String?,
         mustFit: Bool,
-        skippingGated: Bool
+        skippingGated: Bool,
+        keepingShowOrder: Bool = false,
+        avoidingShow: String? = nil
     ) -> Int? {
         let n = min(lookahead, queue.count)
         var best = -1
@@ -432,6 +435,15 @@ enum DailyManifestScheduler {
             let item = queue[i]
             if n > 1, let avoidKey, item.id == avoidKey { continue }
             if i > 0, waitsForEarlierPart(queue, i) { continue }
+            // CLASSIC RERUNS (I-103): an episode never goes ahead of an earlier one of its show waiting before it,
+            // so a pair is not split and a show's run stays in order.
+            if keepingShowOrder, i > 0, item.type == .episode {
+                let show = SchedulePoolOrdering.showIdentity(item)
+                if queue[..<i].contains(where: { $0.type == .episode && SchedulePoolOrdering.showIdentity($0) == show }) { continue }
+            }
+            // The show that just had its turn (`avoidingShow`) is passed over; the caller asks again without it
+            // when nothing else fits.
+            if let avoidingShow, item.type == .episode, SchedulePoolOrdering.showIdentity(item) == avoidingShow { continue }
             let overlap = occupancy?.overlap(key: item.id, start: t, end: t + playSeconds(i), excludingChannel: channelId,
                                              skippingGated: skippingGated) ?? 0
             if overlap == 0 { return i }
@@ -482,8 +494,38 @@ enum DailyManifestScheduler {
         // Every other channel skips the promotion: a new title is in several pools, and
         // promoting it on each one is what made Point Break premiere on five channels at
         // the same moment. Elsewhere it just enters the rotation.
+        // EPISODE ORDER (I-103). Read once, so one day is one order. Under CLASSIC RERUNS `seriesNext` says which
+        // episode follows which in the whole pool: two episodes are a pair only when consecutive, so one whose
+        // neighbour aired yesterday airs alone.
+        let order = EpisodeOrder.current
+        let seriesNext = order == .classicReruns ? SchedulePoolOrdering.seriesNext(pool) : [:]
+        let keepsPairs = order == .classicReruns
+        var blocks: [ManifestBlock] = []
+        // What airs next from `queue`. Under CLASSIC RERUNS the second of a pair airs straight after the first,
+        // wherever a programme picked ahead of the pair left it in the queue and whatever another channel has on;
+        // and once a show has had its turn, another title goes next while one is waiting that fits, so a programme
+        // picked ahead cannot leave two pairs of one show back to back. `pairs` is the pairs of the order as built.
+        func pickNext(_ queue: [PlexMediaItem], pairs: [String: String], at t: Date, avoidKey: String?, mustFit: Bool) -> Int? {
+            let last = blocks.last?.item
+            if keepsPairs, let last, let second = pairs[last.id],
+               let j = queue.prefix(lookahead).firstIndex(where: { $0.id == second }) {
+                return j
+            }
+            let pick: (Bool, String?) -> Int? = { mustFit, avoidingShow in
+                pickCandidate(queue, at: Int(t.timeIntervalSince1970),
+                              playSeconds: { queue[$0].slotSeconds },
+                              occupancy: occupancy, channelId: channelId,
+                              avoidKey: avoidKey, mustFit: mustFit, skippingGated: gated,
+                              keepingShowOrder: keepsPairs, avoidingShow: avoidingShow)
+            }
+            if keepsPairs, let last, last.type == .episode,
+               let other = pick(true, SchedulePoolOrdering.showIdentity(last)) {
+                return other
+            }
+            return pick(mustFit, nil)
+        }
         let interleaved = SchedulePoolOrdering.interleaveByShow(
-            unplayed, seed: channelId, dayNumber: dayNumber
+            unplayed, seed: channelId, dayNumber: dayNumber, order: order, seriesNext: seriesNext
         )
         let promoted = isPremiereChannel
             ? SchedulePoolOrdering.promoteRecentlyAdded(
@@ -505,7 +547,7 @@ enum DailyManifestScheduler {
             unplayedOrdered.append(duplicate)
         }
 
-        var blocks: [ManifestBlock] = []
+        let primaryPairs = keepsPairs ? SchedulePoolOrdering.pairs(in: unplayedOrdered, seriesNext: seriesNext) : [:]
         // The day starts when the programme running over midnight from yesterday ends: it plays to its own end (#315),
         // so nothing of today's may be on air under it. Nil, or before midnight, is the start of the day.
         var t = max(dayStart, runsOverUntil ?? dayStart)
@@ -520,10 +562,7 @@ enum DailyManifestScheduler {
             // (holding it would copy the whole queue on every programme placed).
             let picked: Int? = {
                 let current = queue
-                return pickCandidate(current, at: Int(t.timeIntervalSince1970),
-                                     playSeconds: { current[$0].slotSeconds },
-                                     occupancy: occupancy, channelId: channelId,
-                                     avoidKey: nil, mustFit: true, skippingGated: gated)
+                return pickNext(current, pairs: primaryPairs, at: t, avoidKey: nil, mustFit: true)
             }()
             guard let j = picked else { break }
             let item = queue.remove(at: j)
@@ -534,7 +573,7 @@ enum DailyManifestScheduler {
 
         if t < dayEnd {
             let orderedFull = SchedulePoolOrdering.groupSequelParts(
-                SchedulePoolOrdering.interleaveByShow(pool, seed: channelId, dayNumber: dayNumber &+ 1)
+                SchedulePoolOrdering.interleaveByShow(pool, seed: channelId, dayNumber: dayNumber &+ 1, order: order, seriesNext: seriesNext)
             )
             let goldenShift = Int(Double(totalPoolSec) * 0.6180339887)
             let offsetSec = (dayNumber * goldenShift) % totalPoolSec
@@ -575,15 +614,13 @@ enum DailyManifestScheduler {
             // day (#315): the day's cut and a part-way start were cut files short.
             var loop = (Array(orderedFull[cycleIndex...]) + Array(orderedFull[..<cycleIndex]))
                 .filter { $0.duration > 0 }
+            let loopPairs = keepsPairs ? SchedulePoolOrdering.pairs(in: loop, seriesNext: seriesNext) : [:]
             while t < dayEnd, !loop.isEmpty {
                 let lastKey = blocks.last?.item.id ?? yesterdayLastItemID
                 // Scoped like the primary pass: no copy of the loop per programme.
                 let j: Int = {
                     let current = loop
-                    return pickCandidate(current, at: Int(t.timeIntervalSince1970),
-                                         playSeconds: { current[$0].slotSeconds },
-                                         occupancy: occupancy, channelId: channelId,
-                                         avoidKey: lastKey, mustFit: false, skippingGated: gated) ?? 0
+                    return pickNext(current, pairs: loopPairs, at: t, avoidKey: lastKey, mustFit: false) ?? 0
                 }()
                 let playSec = loop[j].slotSeconds
                 let item = loop.remove(at: j)
