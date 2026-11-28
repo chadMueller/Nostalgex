@@ -3,6 +3,20 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-28 (Android release 14: closing the app on CHOOSE YOUR LIBRARIES no longer skips it, #338)
+
+**State.** Branch `android/release-14`, off `android/release-13` (`36a47bde`, the build in open testing). versionCode 14, versionName 1.0.0. Not on main, no AAB, not uploaded.
+
+**Why.** #338, the Android twin of #337 (Apple TV: `appletv/picker-owed`). The sign-in is saved before CHOOSE YOUR LIBRARIES shows and the screen lives only in memory, so closing the app there and opening it again read every library.
+
+**Changed.** A `libraryPickOwed` flag is saved with the sign-in (`Prefs`). `chooseLibrariesOrScan` sets it, reads the libraries and keeps it while the picker is offered (`LibraryPicker.pickStillOwed`); CONTINUE, a sign-in with nothing to choose, and sign-out clear it. `start()` asks `LibraryPicker.launchStep`: a saved sign-in that still owes the choice resumes that step before the unfinished-loads question and before any scan. The same rules as the Apple TV, including: a relaunch that cannot list any library keeps the choice owed for the next launch. One difference: Android's RETRY on the connection error screen calls `start()` again, so a retry after an unreachable launch asks for the picker again (on the Apple TV it loads the guide with every library and the picker returns on the next launch). A disconnect while the libraries are being read no longer lets the picker open for a signed-out app.
+
+**Measured.** Emulator `nx_tv_1080p`, headless, a Plex stand-in with two libraries (`projects/nostalgex-internal/android/release-14-2026-11-28/`), signed in through LOCAL SERVER (NO PLEX.TV). Release 13's code: app force-stopped on the picker and opened again, the guide loaded and the stand-in saw `/library/sections/1/all` and `/2/all`, no picker. This build: the same steps bring the picker back, one `/library/sections` request and no `/all` request before the choice; after CONTINUE a relaunch goes to the guide. Every request to the stand-in carried no token (I-057).
+
+**Tests.** `engine` `LibraryPickOwedTest` (5), `app` `LibraryPickOwedTest` (7: the saved flag over a relaunch, Jellyfin/Emby, CONTINUE, sign-out, the order of the launch steps), with `LibraryPickerGoldenTest` (11), `PlexLocalTest` (6) and `LocalPlexSignInTest` (12) unchanged and green. No vector moved.
+
+**Unverified.** Not run on a Google TV. The kill and relaunch was run on Plex (local server) only; Jellyfin and Emby share `chooseLibrariesOrScan`. The RETRY difference above is from reading the code, not run. A multi-server Plex relaunch where only one server answers lists one library and clears the flag (the Apple TV's known edge).
+
 ## 2026-11-16 (Android release 11: the weather channel as Chad asked, live channels.json conditional, I-057)
 
 **State.** Branch `android/release-11`, off `android/release-10` (`8caa025e`). Not on main, no AAB, not uploaded.

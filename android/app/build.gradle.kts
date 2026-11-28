@@ -45,7 +45,7 @@ android {
         // The SHIELD runs Android 11 (API 30); 28 still covers older Android TV boxes.
         minSdk = 28
         targetSdk = 36
-        versionCode = 10
+        versionCode = 14
         versionName = "1.0.0"
 
         val enrichmentOn = localProp("nostalgex.enrichment") == "on"

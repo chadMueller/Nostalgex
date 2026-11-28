@@ -26,7 +26,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 class LocalPlexSignInTest {
     // ── The saved sign-in ──
 
-    private class MemoryPrefs : SharedPreferences {
+    internal class MemoryPrefs : SharedPreferences {
         val values = HashMap<String, Any?>()
         override fun getAll(): MutableMap<String, *> = HashMap(values)
         override fun getString(key: String, defValue: String?) = values[key] as? String ?: defValue

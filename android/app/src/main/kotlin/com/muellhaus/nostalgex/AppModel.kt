@@ -904,13 +904,17 @@ class AppModel(private val context: Context) : Playback.Listener {
             launchRecorded = true
             launchGuard.recordLaunch()
         }
-        val signedIn = mbServer != null || prefs.plexSignedIn
-        when {
-            !signedIn -> showPicker()
-            launchGuard.shouldAskBeforeLoading() -> screen = Screen.UnfinishedLoads
-            else -> loadLibrary()
+        // #338: closed on CHOOSE YOUR LIBRARIES last time, so the choice is still owed and nothing is scanned before it (AppState.resumeLibraryPickIfOwed).
+        when (LibraryPicker.launchStep(signedIn, prefs.libraryPickOwed, askBeforeLoading = signedIn && launchGuard.shouldAskBeforeLoading())) {
+            LibraryPicker.LaunchStep.SIGN_IN -> showPicker()
+            LibraryPicker.LaunchStep.RESUME_PICK -> chooseLibrariesOrScan(resuming = true)
+            LibraryPicker.LaunchStep.ASK_BEFORE_LOADING -> screen = Screen.UnfinishedLoads
+            LibraryPicker.LaunchStep.LOAD -> loadLibrary()
         }
     }
+
+    /** Signed in to a server: Jellyfin or Emby, or Plex by plex.tv or locally. */
+    private val signedIn: Boolean get() = mbServer != null || prefs.plexSignedIn
 
     /** TRY AGAIN after two unfinished loads: the next load gets the full allowance again. */
     fun tryLoadingAgain() {
@@ -1329,14 +1333,20 @@ class AppModel(private val context: Context) : Playback.Listener {
      * this sign-in; with more than one, the viewer can leave some out before the first scan
      * touches them. One library (or none readable: the scan reports its own error) scans at once.
      */
-    private fun chooseLibrariesOrScan() {
+    private fun chooseLibrariesOrScan(resuming: Boolean = false) {
+        // Owed from here (#338): the sign-in is already saved, so a launch before the choice is made must come back to this step.
+        prefs.libraryPickOwed = true
         // Every sign-in starts again (N-016 rule 9): every library on, every hidden one off, and the old single hidden switch gone.
         saveChoices(LibraryPicker.afterSignIn())
         prefs.clearLegacyHiddenSwitch()
         screen = Screen.Loading("READING YOUR ${backendName.uppercase()} LIBRARY")
         scope.launch {
             val sections = loadAllSections()
+            // A disconnect while the libraries were being read: nothing is signed in to choose for.
+            if (!signedIn) return@launch
             availableSections = sections
+            // Still owed while the picker is offered; cleared when there is nothing to choose, unless a relaunch could not list any library.
+            prefs.libraryPickOwed = LibraryPicker.pickStillOwed(sections, resuming)
             Log.i(TAG, "LIBRARIES ${sections.size} on ${selectedServers.size} server(s)")
             // Offered only when there is something to choose: more than one library, or a hidden one (it starts off) (N-016 rule 8).
             if (LibraryPicker.offersPicker(sections)) screen = Screen.ChooseLibraries(sections) else loadLibrary()
@@ -1361,6 +1371,7 @@ class AppModel(private val context: Context) : Playback.Listener {
         val sections = (screen as? Screen.ChooseLibraries)?.sections ?: return
         if (included.isEmpty()) return
         saveChoices(LibraryPicker.withOn(sections, included))
+        prefs.libraryPickOwed = false
         Log.i(TAG, "LIBRARIES ${included.size} of ${sections.size} included")
         loadLibrary()
     }

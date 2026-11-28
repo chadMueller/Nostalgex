@@ -55,6 +55,15 @@ class Prefs(private val prefs: SharedPreferences) {
         prefs.edit().putString("plexToken", "").putBoolean("plexNoPlexTv", true).putString("servers", json.encodeToString(listOf(server))).apply()
     }
 
+    /**
+     * #338: true from the moment a sign-in is saved until the viewer has made, or never needed, the library choice. The sign-in is saved before
+     * CHOOSE YOUR LIBRARIES is shown and that screen lives only in memory, so closing the app on it used to relaunch into a scan of every library.
+     * Set when the sign-in reaches the picker step, cleared by CONTINUE, by a sign-in with nothing to choose and by [signOut].
+     */
+    var libraryPickOwed: Boolean
+        get() = prefs.getBoolean("libraryPickOwed", false)
+        set(value) = prefs.edit().putBoolean("libraryPickOwed", value).apply()
+
     /** Each server on, with the address that answered at sign-in. */
     var servers: List<PlexServer>
         get() = prefs.getString("servers", null)?.let { runCatching { json.decodeFromString<List<PlexServer>>(it) }.getOrNull() } ?: emptyList()
@@ -235,7 +244,7 @@ class Prefs(private val prefs: SharedPreferences) {
         }.apply()
 
     // The saved channel belongs to the lineup just left; the switch stays (the Apple TV's disconnect).
-    fun signOut() = prefs.edit().remove("plexToken").remove("plexNoPlexTv").remove("servers").remove("mediaBrowser").remove(LaunchChannelMemory.SAVED_KEY)
+    fun signOut() = prefs.edit().remove("plexToken").remove("plexNoPlexTv").remove("libraryPickOwed").remove("servers").remove("mediaBrowser").remove(LaunchChannelMemory.SAVED_KEY)
         .remove("nostalgex_last_load_at").remove("nostalgex_last_library_check_at").remove("nostalgex_library_signature").apply()
 }
 
