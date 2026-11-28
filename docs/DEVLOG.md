@@ -3,6 +3,33 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-28 (web 1.0.24, Roku 1.0.14 and Apple TV 1.0.34 land on main together)
+
+**Why.** The Roku port of EPISODE ORDER needs web 1.0.24's `scripts/` beside it, the Apple TV's engine and goldens are the same files, and the new `scripts/schedule-parity-golden.json` turns the `roku`, `tvos-unit-tests` and `android` jobs red unless each side has what it needs. One landing, one tag (`tuner-v1.0.24`).
+
+**What is in it.** `web/1.0.24-next` (EPISODE ORDER, the weather search fixes, the library choice a sign-in owes, enrichment by type and number, the guide row click), `roku/1.0.14`, and `appletv/1.0.34-next` (build 59, in App Store review), on top of main's privacy page changes of today. Roku's #335 and #336 come in as the pull requests' own commits, so GitHub shows them merged.
+
+**Changed on top of the branches.**
+- Roku's stick seed test (`roku/tests/MemoryBudgetTests.brs`) held a home-network address, which the leak guard refuses. It is now a 192.0.2.x documentation address, and the Roku commits were rewritten so the old address is in no commit that reaches main. The Roku commit hashes in the entries below are the ones before that rewrite.
+- Android: Kotlin has no EPISODE ORDER, so `ScheduleParityGoldenTest` reads `android/engine/src/test/resources/schedule-parity-golden-frozen.json`, a frozen copy of the shared golden from before it. The shared golden returns to that test when Android ports EPISODE ORDER, in release 15. The Android engine is unchanged.
+- Web: the guide row click handler also clears `guideStripeGroup` and `guideStripeJumped`, as the bundle list's open path does, so a click after a stripe select leaves no stripe state behind.
+- Roku: a comment on `NxWxGetRetrying` that a timeout also returns code 0, so the worst case is about 30 s on the task thread.
+- This file: two Discord user names and a paid-tier plan clause were taken out of the entries below, the stale Half-done line of the web 2026-11-27 entry is corrected, and the two merged histories are kept, newest first.
+
+**Not changed.** `roku/releases.tsv` 1.0.14 still points at the first signed package (`0ea8074d`); it is replaced when the Roku release is signed again from this main.
+
+## 2026-11-28 (Roku 1.0.14: a weather request that gets no answer is tried once more)
+
+**Why.** On the stick (Streaming Stick Plus), the first request to nostalgex.app after it had sat idle for a minute or two failed with code 0 and the next one worked: three of three runs, a place search, another place search and the first forecast. So the first LOCAL WEATHER place search read PLACE LIST NOT AVAILABLE.
+
+**Changed.**
+- `NxWxGetRetrying` (`source/weather/WeatherStore.brs`): one GET, and a second try after 500 ms when the first returned code 0. Any answer, a 404 or a 500 included, stands. `WeatherTask` sends the forecast, the place files and the radar capabilities request through it; the radar frame files do not use it. A timeout also returns code 0, so the worst case is about 30 s on the task thread (two 15 s tries).
+- `NxWxReadForecast` returns nothing when no saved forecast file exists, so the first read no longer prints a file error.
+
+**Tests.** `WeatherTests`: an answer taken as it is, a 404 and a 500 not tried again, no answer then an answer, no answer twice (one retry only), no answer then a 404, the 500 ms pause, and a failed first read then success through the retry. The saved-forecast read needs a file system the interpreter lacks, so it is a stick check.
+
+**Half-done.** The retry is not yet seen on the stick after an idle gap.
+
 ## 2026-11-28 (Privacy: the hosted web tuner's sign-in screen loads the analytics script)
 
 **Changed.** `privacy.html` and `Nostalgex/PRIVACY_POLICY.md` said the web tuner does not load the statsngraphs script. It does: `web-tuner.html`
@@ -20,27 +47,11 @@ November 28, 2026.
 sends a random visitor ID, and what the analytics host stores is not visible from here.
 
 
-## 2026-11-20 (publish 80s sitcoms channel)
-
-**Shipped.** Nothing until this lands on main. Vercel then deploys `https://www.nostalgex.app/blog/80s-sitcoms-channel`.
-
-**Why.** Today's post: the 80s sitcoms that make a 24/7 channel, and how Nostalgex puts the ones you own on 80S SITCOMS. The copy was already approved (`draft: false`, date 2026-11-20); this session only put the file in `content/blog` and recorded the image sizes. `content/roku.json` is unchanged.
-
-**Changed.**
-- `content/blog/80s-sitcoms-channel.md`: added exactly as approved. Copy was not rewritten.
-- `scripts/media-sizes.json`: hero `header.webp` is 1280x720. OG `cover.jpg` is 1200x630. Inline `80s-sitcoms-guide.webp` is 1920x1080. All three R2 URLs returned 200 (header.webp 52,594 bytes; cover.jpg 76,713 bytes; 80s-sitcoms-guide.webp 81,670 bytes). Images stay on R2; none committed.
-- `content/roku.json` was not touched. `announcementPost` was not set.
-- `npm run blog:render` wrote nineteen live posts into `public/sitemap.xml`, including `/blog/80s-sitcoms-channel` with lastmod 2026-11-20. `/blog` lastmod is 2026-11-20. `npm run build` emitted the post to `dist/blog/80s-sitcoms-channel.html` with width/height on the hero, the inline still and the OG card, and no missing-size errors. `npm run bundles:render` ran after the blog step, so the committed sitemap has the blog block above the channels block, matching a full site build. `dist-asset-check`: 406 local references, all present.
-
-**Half-done.** None.
-
-**Next.** None for this post.
-
 ## 2026-11-27 (web 1.0.24-next: the release cut, and the guide row click)
 
 **Shipped.** Nothing. `web/1.0.24-next` is pushed and ready; `tunerVersion` is 1.0.24 in the last commit, no `tuner-v` tag, not merged to main.
 
-**What the release holds.** Seven commits over main (4fac0f4d): the weather fixes (#332), the library choice a sign-in still owes surviving a relaunch, EPISODE ORDER (I-103), and the enrichment lookup by media type and TMDB number. `channels.json` is unchanged, so there are no new channels. Nothing from `pro/web`, THEME or a contributor fork is in it.
+**What the release holds.** Seven commits over main (4fac0f4d): the weather fixes (#332), the library choice a sign-in still owes surviving a relaunch, EPISODE ORDER (I-103), and the enrichment lookup by media type and TMDB number. `channels.json` is unchanged, so there are no new channels. Nothing from a contributor fork is in it.
 
 **Changed.**
 - A click or a tap on a guide row now moves the cursor, the highlight and the info panel to that row before it tunes. Before, the click tuned the channel and left all three on the row the cursor was on, so after a bundle stripe select the info panel stayed on the bundle's first channel (Discord report of 2026-11-21, Trello card "Bug: Web tuner, picking a channel from the bundle strip leaves the info stuck on the bundle's first channel"). Down then Enter always did it right; only the mouse and the touch path did not. The bug is older than the stripe: any click on a row did it, the stripe select just made it easy to see.
@@ -49,48 +60,9 @@ sends a random visitor ID, and what the analytics host stores is not visible fro
 
 **Tests run (one at a time, load under 4 before each, no full suite).** `build`, `build:selfhost`, `test:tuner-version:builds` 69, `test:weather` 45, `test:enrichment` 158, `test:episode-order` 25, `test:schedule` 12, `test:schedule-parity` 66, `test:collections` 59, `test:play-to-end` 48, `test:library-picker:owed` 47, `test:episode-order:browser` 51, `test:weather:browser` 214, `test:guide-cursor:browser` 94, `test:guide-row-click:browser` 33, `readme:check`, `changelog:check`. Not run: the full `npm test`, the Roku golden run.
 
-**Half-done.** The Roku port of EPISODE ORDER does not exist. `roku/1.0.14` carries the weather fixes, the pick-owed fix and the enrichment-by-type change, but its `scripts/nostalgex-daily-manifest.js` and `scripts/schedule-parity-golden.json` are main's. This branch changes both (SCHEMA_VERSION 5, a new golden), and the `roku` CI job runs on those paths, so merging this to main without the port is expected to turn it red. By inspection only; the Roku golden run was not done here.
+**Half-done.** Nothing on this branch. The Roku port of EPISODE ORDER is `roku/1.0.14` and it lands on main in the same change as this branch (the Roku vector generator checks this branch's `scripts/` engine, so either alone turns the `roku` job red). The Apple TV's engine and goldens are byte-identical to this branch's. Kotlin has no EPISODE ORDER, so the Android `ScheduleParityGoldenTest` is pinned to a frozen copy of the shared golden from before it (see the 2026-11-28 landing entry).
 
-**Next.** Roku ports EPISODE ORDER from `scripts/nostalgex-daily-manifest.js` and `scripts/episode-order-golden.json`. Chad's go to merge to main and push the `tuner-v1.0.24` tag. After the tag: `PARITY.md` and the README platform versions.
-
-
-## 2026-11-19 (web 1.0.24-next: EPISODE ORDER, I-103)
-
-**Shipped.** Nothing. On `web/1.0.24-next`, not pushed, `tunerVersion` still 1.0.23, no tag.
-
-**Why.** Chad, 2026-11-19: the free tier gets two app-wide episode modes. CLASSIC RERUNS (the default) airs two consecutive episodes of a show back to back from a seeded random spot; SHUFFLE airs one at a time, random. The default schedule changes on purpose. IN ORDER and the other modes are held for Plus (N-092) and not built.
-
-**Changed.**
-- The shared engine and its tests came from the Apple TV commit `21c0db8b` (appletv/1.0.34-next, the EPISODE ORDER review fixes on top of `2155af04`), checked out byte for byte, not re-implemented: `scripts/nostalgex-daily-manifest.js` (SCHEMA_VERSION 5, `setEpisodeOrder`, `interleaveByShow`, `seriesNext` and the rest), `scripts/schedule-parity-golden.json`, `scripts/episode-order-golden.json`, `schedule-parity-dump.mjs`, `schedule-parity-golden.mjs`, `nostalgex-episode-order-smoke.mjs`, `nostalgex-schedule-order-smoke.mjs`, `nostalgex-collections-smoke.mjs`, `play-to-end-smoke.mjs`, and the `test:episode-order` lines in `package.json`. Both branches carry the identical engine. The review fixes: a programme picked ahead no longer splits a pair, a show is its server id and not its title, a second copy of an episode does not air, and the second of a pair airs even when another channel has it on (pinned by the golden case `plex-denver-pairs-kept`).
-- `plex-tuner.html`: every episode (Plex, Jellyfin, Emby) now carries `seTag` ("S01E04", the string already built for `meta`); without it CLASSIC RERUNS falls back to library order. The engine's show identity is `showKey` (Plex `grandparentRatingKey`, Jellyfin and Emby `SeriesId`), with the year as the fallback. The scan already set both on every episode, on all three backends (the two episode literals in `plex-tuner.html`), so nothing was empty and nothing needed filling. A library saved before this has no `seTag`, so it is read back from the item's `meta` when the cache is restored (`restoreSeTags`). `LIBRARY_SCAN_REVISION` stays 3: `play-to-end-smoke.mjs` pins it, and that file is the Apple TV's.
-- An EPISODE ORDER row on the CHANNELS & BUNDLES list page, under Watershed: a real button that shows CLASSIC RERUNS or SHUFFLE and cycles on a press, with the Apple TV's words ("Two episodes of a show back to back, in order." or "One episode at a time, picked at random.", then "Movie channels are not affected."). Saved in localStorage `nostalgex_episode_order`; the default is no key, as on the Apple TV. The page hands the choice to the engine at load and on every press, and builds every schedule again. A press that does not save changes nothing.
-- The Docker image gets all of it from the same page: nothing here sits inside a `selfhost:strip` block (checked by cutting the strip blocks out of `plex-tuner.html` the way the builder does and finding every new piece still there). `npm run build:selfhost` was not run.
-- New test `scripts/episode-order-browser-smoke.mjs` (`npm run test:episode-order:browser`, not part of `npm test`): 51 checks at desktop, 960x540 at DPR 2 and phone width, on a Jellyfin stub with four shows of numbered episodes, two of them different shows with one name ("Twin Show"). It checks `showKey` and `year` on every episode, that same-title shows do not pair, and names the one place a pair cannot continue: across midnight, where each day is packed from its own seeded spot. It fails on the page before this change.
-
-**Tests run (one at a time, load under 4 before each, no full suite).** `test:schedule-parity` 66, `test:episode-order` 25, `test:schedule` 12, `test:play-to-end` 48, `test:collections` 59, `test:episode-order:browser` 51. `test:play-to-end` failed once, on the scan-revision pin, when I had bumped the revision; fixed by the `meta` read-back above.
-
-**Half-done.** Plex and Emby episodes get `seTag` and `showKey` from the same lines the code already used, but only Jellyfin was run in a browser.
-
-**Next.** Roku ports the engine change (it copies this JS).
-
-
-## 2026-11-19 (web 1.0.24-next: weather search fixes and the library choice a sign-in owes)
-
-**Shipped.** Nothing. This is the web and Docker next-release integration branch, `web/1.0.24-next`, off `origin/main` (4fac0f4d). It is not pushed, `tunerVersion` is still 1.0.23 and there is no `tuner-v` tag.
-
-**Why.** Work is banked on one branch per product until a release is cut. Two things are on it so far.
-
-**Changed.**
-- Merged `web/weather-search-fixes` (8b1084b7): a failed place-list load is never remembered, the place search shows up to 36 matches, and a place with no radar coverage gets a loop without the radar. The cities1000 list is not on it (`site/weather-cities1000` stays separate).
-- The library picker relaunch gap (Apple TV #337, Roku #331, Android #338). The web tuner had it. The landing page saves the sign-in to localStorage before CHOOSE YOUR LIBRARIES, and the picker was only offered to a visit that came straight from a sign-in (`libraryPickAllowed` and `signInPending` live in memory). A new browser session (closed tab, restarted browser, TV browser relaunch, a Docker page opened again) restored the saved login and read every library without asking. Proved first on the page as it was: sign in, picker up, new browser context carrying the old localStorage and no sessionStorage, no picker and `lib1,lib2` both read. A reload in the same tab was fine, because sessionStorage still held the sign-in.
-- The fix is the Apple TV's `pickOwed`: `plex-tuner.html` keeps `nostalgex_library_pick_owed` in localStorage, set when a sign-in begins its choices, cleared by CONTINUE, by a sign-in with nothing to choose, by sign-out and by a refused login. A launch that finds it owed shows the picker again before any scan, with the choices as they are (the sign-in already started them again; a relaunch does not reset them). Saving a library choice in Settings clears it too. A relaunch that cannot read the libraries keeps it owed for the next one. Web only: a relaunch waits 15 seconds for the library list, then hands over to the loading screen (which has START OVER) so an unreachable server does not leave the viewer on the picker's one quiet line.
-- New test `scripts/library-pick-owed-browser-smoke.mjs` (`npm run test:library-picker:owed`, not part of `npm test`, like the other browser smokes). 43 checks at desktop, 960x540 at DPR 2 and phone width. On the page before the fix it fails 9 checks, including the relaunch.
-
-**Tests run (the weather and picker ones only, one at a time, load under 4 before each).** `test:library-picker:owed` 43 passed; `test:library-picker` 167; `test:library-selection` 26; `test:library-picker:browser` 141; `test:weather` 45; `test:weather:browser` 214. No full suite.
-
-**Half-done.** Plex was not driven through a relaunch in the browser: the gate is the same function for every backend and the Jellyfin stub exercises it, but the Plex path has no relaunch check of its own.
-
-**Next.** Cross-product: Apple TV has the fix on `appletv/picker-owed`, Roku has #331 open for it, Android #338. The Roku engine copy does not include `plex-tuner.html`, so there is no Roku port from this change.
+**Next.** The landing on main with Roku 1.0.14 and Apple TV 1.0.34, then the `tuner-v1.0.24` tag (Chad's go, 2026-11-28). After the tag: `PARITY.md` and the README platform versions.
 
 ## 2026-11-27 (Roku 1.0.14: EPISODE ORDER, I-103, the port of web 1.0.24 and Apple TV 1.0.34)
 
@@ -123,6 +95,16 @@ sends a random visitor ID, and what the analytics host stores is not visible fro
 
 **Not checked.** Against the live table (a write there is not a test). A TMDB refresh can no longer clear a franchise or a rating on purpose; the Apple TV cannot either.
 
+## 2026-11-27 (Apple TV 1.0.34 (59): the store cut)
+
+**State.** `appletv/1.0.34-next`, version 1.0.34, build 59 (App Store Connect's highest is 58). Not archived, not uploaded. Chad, 2026-11-27, on getting Apple TV 1.0.34, web 1.0.24 and Roku 1.0.14 ready as one free release: "alright lets do it".
+
+**In the build** (main plus the branch): Settings load status, the LOCAL WEATHER place search and radar fixes (#332), the library picker relaunch fix (#337), EPISODE ORDER with CLASSIC RERUNS now two consecutive episodes, the hourly live channel list check, tip jar signals, and the two enrichment fixes (mixed-key saves, a row keyed by type and number). No contributor commits on the app delta since 1.0.33, no new launch hooks beyond the demo-mode UI test fixture. Bundled channels.json is version 50, as in 1.0.33.
+
+**Tested.** Full NostalgexTests once, serial, one simulator of its own: 1,536 tests, 35 skipped, 0 failures (the count the run printed). Then one class after review: `EnrichmentUpsertBodyTests`, 3 tests, a film and a show sharing a number both go out. Release build for generic tvOS compiles.
+
+**Not done.** Not on a TV. The privacy page and PRIVACY_POLICY.md do not list the three tip events, and the App Store privacy label was not looked at for them.
+
 ## 2026-11-23 (Roku 1.0.14: enrichment rows by type and number; the live channels.json apply measured on the stick)
 
 **State.** Branch `roku/1.0.14`, one commit on `8e2d7ac0`. Nothing pushed, not signed, no build number change.
@@ -147,6 +129,36 @@ What it shows. The gate waits when the projection reaches the stop line and appl
 
 **Tests.** The enrichment suite alone, once, before the commit: 254 passed and 1 failed, the failure my test (FormatJson refuses one array twice in a list), fixed. Against the web engine's vectors: 255 passed, 0 failed. **The cut run, once, on head `098b4991`:** `tests/run.sh` (one interpreter at a time, 63 minutes) ALL TESTS PASSED, 92 suites, 15,602 checks, 0 failed, with the six static guard scripts (guards, includes, uninit, testlists, dupkeys, observers) and the stamp check inside it; the added-lines scan (trailers, secrets, addresses, dashes) PASS; static analysis (`sca-cmd`, portable Temurin 21 JRE, not installed) 0 errors and the one old warning (a 1,434 character line in `SubtitleSettings.brs`). The stick was put back on the 1.0.13 candidate (build `5dbf5ff91346`, zip hash checked). Not run: `pr-check.sh` (it repeats the suite), the golden suite on the stick, signing.
 
+## 2026-11-23 (Apple TV: an enrichment row is looked up by its type and its number)
+
+**Shipped.** Nothing. Branch `appletv/1.0.34-next`.
+
+**Why.** TMDB numbers films and shows separately, so one number can be a film and a show. The shared `media_enrichments` table's key is now the number plus the type (`tmdb_id`, `media_type`), so it holds a row for each, and a read by number (`tmdb_id=in.(...)`) can answer with two rows. The app kept rows in memory under the bare number: the second row to arrive replaced the first, a show could read a film's keywords and genres, and a show whose number a cached film had was taken as cached and never asked of TMDB.
+
+**Changed.** The in-memory cache, the "already cached" check and every lookup by a library item use `type:number` (`MediaEnrichment.cacheKey`, `PlexMediaItem.enrichmentKey`; an episode's type is `tv`). The work list is one entry per type and number. The three franchise lookups in `AppState+Franchises` use the same key. The table is still asked by number, each number once. Saves are unchanged: the row already carries `media_type`.
+
+**Disk cache.** The file format is unchanged (rows under a text key). On load each row is placed under its own type and number, so a file an older build wrote under the bare number loads as before. Going back is not safe: a file this build writes is keyed `type:number` (`movie:603`). 1.0.33 loads those rows into its in-memory cache under those keys, so the cache is not empty and `enrichmentPending` never fires, while every lookup by bare number misses. Pools are then built without networks, keywords or scores and the refill is skipped, which can repeat I-073 on the next rebuild. App Store viewers cannot go back a version; a TestFlight tester who installs an older build can. (Corrected 2026-11-27 after review; this paragraph first said an older build would just fetch again.)
+
+**Tests.** `EnrichmentKeyTests` (5, new): a film and a show that share a number each find their own row, in either arrival order; a show finds nothing when only the film is cached; a show is still on the fetch list when the table only has the film. `OMDBRelayTests` (17) and `EnrichmentCacheStoreTests` (5) follow the new key. One run of the three, 27 tests, 0 failures. No full suite.
+
+**Not done.** Not run against the live table or a real library. Roku and Android key the row by the bare number and need the same change. The web tuner was not read for it.
+
+## 2026-11-23 (Apple TV: enrichment saves to the shared table were refused when a batch held mixed rows)
+
+**Shipped.** Nothing. Branch `appletv/1.0.34-next`.
+
+**Found.** The shared `media_enrichments` table refuses a whole upsert request whose rows do not all carry the same keys (PGRST102 "All object keys must match", HTTP 400). A `MediaEnrichment` row leaves out a key it has no value for (IMDb id, franchise id and name, the five OMDb fields), and `SupabaseService.upsertEnrichments` sent up to 200 rows of any shape in one request. A request holding, say, one film in a collection and one that is not was refused whole, the app printed "Supabase upsert failed: HTTP 400", then "Saved N enrichments to Supabase" all the same, and carried on. A request of one row, or of rows that happened to match, went through.
+
+**How long.** The upsert and the optional IMDb id are both in the first enrichment commit (2026-04-08, in the pre-public history), so the code has had the fault from its first day. An App Store build could not reach the table before the Supabase address and key came in through `Config.xcconfig` (2026-10-11); `v1.0.26` is the first tag that holds that change, and it also holds the franchise keys (2026-10-10) that make film rows differ from each other. Whether a given archive carried the key cannot be read from git.
+
+**What a viewer got, from the code.** `EnrichmentService.enrichItems` asks TMDB for every id the shared table has no row for; the disk cache is not consulted there (it is read on a snapshot restore only). So a title whose save was refused was fetched from TMDB again on every full library load, on that device and on every other, with the "Fetching metadata" step repeating, and the save refused again whenever the batch was mixed. An IMDb rating learned from OMDb in such a pass lived in memory and the disk cache but not in the table; on the next load the title's fresh TMDB row (or the table's older row) replaced it without the rating, and OMDb lookups are capped at 50 a load, so a rating could be lost and have to be looked up again. Channels gated on an IMDb rating leave out a title with no rating. Not measured: how many saves were refused in the field, or how many titles a real library lost from a gated channel.
+
+**Changed.** `SupabaseService.upsertBodies` groups the rows by the keys they carry and sends each group in its own requests of up to 200. A key is still left out and never sent as null, because a null would overwrite what another device saved. Nothing else is ported from the branch this came from: no new columns are written.
+
+**Tests.** `EnrichmentUpsertBodyTests` (2, new): eight rows of five shapes go out as five requests, each with one set of keys, every row once, no nulls; 450 like rows split 200, 200, 50. Against the live table, two rows it already held were written back unchanged: both in one request, as the app sent before, 400 PGRST102; each in its own request, 200 and 200; both rows read back identical. No row was added or removed.
+
+**Half-done.** The web tuner and Roku build their upsert rows another way (`scripts/nostalgex-enrichment.js`, `roku/source/enrich/Enrichment.brs`) and were not read for the same fault. The "Saved N enrichments" line still prints after a refused request.
+
 ## 2026-11-22 (Roku 1.0.14: the faster live channels.json, N-074, added from the held branch)
 
 **State.** Branch `roku/1.0.14`, cherry-pick of `roku/live-channels-faster` (`377f3586`, held since 2026-11-16 only for release timing) plus one gate on top. Nothing pushed, not signed, no build number change, version still 1.0.14 (build 14). Chad, 2026-11-22: add the faster channel check to the 1.0.14 line to match the Apple TV (`appletv/1.0.34-next`).
@@ -162,6 +174,28 @@ What it shows. The gate waits when the projection reaches the stop line and appl
 **The daily schedule memo.** The Apple TV clears its schedule memo on an apply. Roku's equivalent is `nxManifests` (`NxManifestCache`), cleared by `NxClearManifests()` in `buildGuide` whenever the filter results are not reused. They are reused only by the same build key (`NxSavedFiltered`, exact key), and the live copy's version is in that key (`NxBuildKey`), so an apply never reuses them and the memo is cleared by construction. No extra line added.
 
 **Tests.** `tests/LiveChannelsTests.brs`: five cases for the gate (150 MB, 256 MB, normal, no reading). Run once, the live-channels suite only, plus the static checks. Not run: the full suite, static analysis (`sca.sh`), the stick.
+
+## 2026-11-22 (Apple TV 1.0.34: the faster live channel list is in, N-074)
+
+**State.** On `appletv/1.0.34-next`. Chad, 2026-11-22: "the hevc fix and faster channel - why don't we add that?" The work held on `appletv/live-channels-faster` since 2026-11-16 (the entry of that date below) is cherry-picked here. It was held for release timing only. Not archived, the build number is untouched.
+
+**What a TV does now.** It asks nostalgex.app for channels.json at launch, on return to the foreground and from the 15 minute background loop, but at most once an hour (`ChannelConfigStore.checkInterval`, 3600 s; 1.0.33 asked once a day). An unchanged file is a 304. A newer valid one is applied from the library already in memory, with no server scan, the next time the viewer is on the guide, or at the next launch. Never while a programme is full screen and never during a load. The header says UPDATING LIBRARY, then GUIDE READY. So a published change reaches an open TV within about an hour and 15 minutes at most if it sits on the guide, and otherwise when the viewer next comes back to the guide.
+
+**With the 1.0.34 work.** The pick applied clean in code; only this file conflicted.
+- Settings load status: an apply sets the same state a background refresh does, so the Settings bar reads UPDATING LIBRARY and then GUIDE READY with the header. An apply never starts under Settings.
+- EPISODE ORDER: the choice is a saved setting, not part of channels.json, and an apply does not touch it. One line added: the apply now drops the scheduler's memo (`DailyManifestScheduler.invalidateMemo`). The memo's key is a pool's size and its first and last title, so a rule change that swapped titles in the middle of a pool could have kept serving the old day until midnight. The day packed after an apply is packed under the viewer's order.
+
+**Tested.** `LiveChannelRulesTests` (9), `EpisodeOrderTests` (16) and the new `BigLibraryHarness.testALiveRulesApplyKeepsTheEpisodeOrder` (2,000 titles, SHUFFLE picked, apply, still SHUFFLE and the day aired is the SHUFFLE day), once, on the simulator: 26 pass. Not run: the full suite, the 30,000 title measurement again, and anything on a TV. No real download of a new channels.json was exercised here; the fetch is switched off under tests.
+
+## 2026-11-21 (Tip jar signals)
+
+**State.** On `appletv/1.0.34-next`. Chad, 2026-11-21: "don't we want analytics on tips as well?" The tip jar sent nothing until now, on purpose, to stay off the privacy label. That choice is reversed.
+
+**Three signals, one parameter.** `tip.started`, `tip.completed` and `tip.failed`, each with `tier` = `popcorn`, `tv_dinner` or `pizza_night`. No quantity, price, total, currency or transaction id, and no programme or channel. Started fires when the viewer confirms and the App Store sheet is asked for. Completed fires with the thank-you card, so once per transaction, and also for an Ask to Buy tip approved later. Failed fires when a tip the viewer started is refused or fails verification. A cancel and a wait for approval send nothing.
+
+**Before this ships.** The App Store privacy label and `nostalgex.app/privacy` need a look: these are anonymous counts, but "Purchases" may need declaring. `TipJarTests` pins the names and the one key, so a new parameter fails there first.
+
+**Tested.** Simulator: `TipJarTests` (21), `AnalyticsEventTests`, `AnalyticsGateTests`. No purchase was run.
 
 ## 2026-11-20 (Roku 1.0.14: the margin rule, the stick runs, the beta cut prepared)
 
@@ -206,7 +240,7 @@ What it shows. The gate waits when the projection reaches the stop line and appl
 
 **State.** Branch `roku/1.0.14`.
 
-**Why.** The Plex stick pass with stand-in servers sized like brytenyte's (A 19,700 titles, B 22,400, Big 62,000) showed no quit at the full limit (Big alone: 62,000 read, peak 323 MB of 514, 63%) or at a simulated 256 MB (57,600 read of 104,000, Big cut at 15,500, peak 224 MB of 268, 83%), but a peak of 162 MB at a simulated 150 MB (103% of it). What the channel build adds was not half of what the scan added: it is about 22 MB and 1.9 KB for each item of the largest server (the filter keeps a record for each, I-065): 62,000 items +143 MB, 22,400 +58, 19,700 +55, 42,100 across two servers (largest 22,400) +55, and a Jellyfin library of 21,400 +46. At a small limit that is most of the peak. And a second server's scan was started at full memory (it read its first page).
+**Why.** The Plex stick pass with stand-in servers sized like a Discord user's (Stick 4K, Plex) (A 19,700 titles, B 22,400, Big 62,000) showed no quit at the full limit (Big alone: 62,000 read, peak 323 MB of 514, 63%) or at a simulated 256 MB (57,600 read of 104,000, Big cut at 15,500, peak 224 MB of 268, 83%), but a peak of 162 MB at a simulated 150 MB (103% of it). What the channel build adds was not half of what the scan added: it is about 22 MB and 1.9 KB for each item of the largest server (the filter keeps a record for each, I-065): 62,000 items +143 MB, 22,400 +58, 19,700 +55, 42,100 across two servers (largest 22,400) +55, and a Jellyfin library of 21,400 +46. At a small limit that is most of the peak. And a second server's scan was started at full memory (it read its first page).
 
 **Changed.**
 - `NxScanMemoryFull` also stops when memory plus what the build will take (`NxBuildOverheadPct`, 22 MB and 1.9 KB an item of the largest server read so far, counted from the load's start across servers) reaches 90%; the check before the channel build takes the larger of that and the old half-of-the-growth guess.
@@ -217,11 +251,64 @@ What it shows. The gate waits when the projection reaches the stop line and appl
 
 **Half-done.** The new build cost per item is measured on stand-ins; a re-run at 150 MB on the stick is the check.
 
+## 2026-11-20 (publish 80s sitcoms channel)
+
+**Shipped.** Nothing until this lands on main. Vercel then deploys `https://www.nostalgex.app/blog/80s-sitcoms-channel`.
+
+**Why.** Today's post: the 80s sitcoms that make a 24/7 channel, and how Nostalgex puts the ones you own on 80S SITCOMS. The copy was already approved (`draft: false`, date 2026-11-20); this session only put the file in `content/blog` and recorded the image sizes. `content/roku.json` is unchanged.
+
+**Changed.**
+- `content/blog/80s-sitcoms-channel.md`: added exactly as approved. Copy was not rewritten.
+- `scripts/media-sizes.json`: hero `header.webp` is 1280x720. OG `cover.jpg` is 1200x630. Inline `80s-sitcoms-guide.webp` is 1920x1080. All three R2 URLs returned 200 (header.webp 52,594 bytes; cover.jpg 76,713 bytes; 80s-sitcoms-guide.webp 81,670 bytes). Images stay on R2; none committed.
+- `content/roku.json` was not touched. `announcementPost` was not set.
+- `npm run blog:render` wrote nineteen live posts into `public/sitemap.xml`, including `/blog/80s-sitcoms-channel` with lastmod 2026-11-20. `/blog` lastmod is 2026-11-20. `npm run build` emitted the post to `dist/blog/80s-sitcoms-channel.html` with width/height on the hero, the inline still and the OG card, and no missing-size errors. `npm run bundles:render` ran after the blog step, so the committed sitemap has the blog block above the channels block, matching a full site build. `dist-asset-check`: 406 local references, all present.
+
+**Half-done.** None.
+
+**Next.** None for this post.
+
+## 2026-11-19 (web 1.0.24-next: EPISODE ORDER, I-103)
+
+**Shipped.** Nothing. On `web/1.0.24-next`, not pushed, `tunerVersion` still 1.0.23, no tag.
+
+**Why.** Chad, 2026-11-19: there are two app-wide episode modes. CLASSIC RERUNS (the default) airs two consecutive episodes of a show back to back from a seeded random spot; SHUFFLE airs one at a time, random. The default schedule changes on purpose. IN ORDER and the other modes are not built.
+
+**Changed.**
+- The shared engine and its tests came from the Apple TV commit `21c0db8b` (appletv/1.0.34-next, the EPISODE ORDER review fixes on top of `2155af04`), checked out byte for byte, not re-implemented: `scripts/nostalgex-daily-manifest.js` (SCHEMA_VERSION 5, `setEpisodeOrder`, `interleaveByShow`, `seriesNext` and the rest), `scripts/schedule-parity-golden.json`, `scripts/episode-order-golden.json`, `schedule-parity-dump.mjs`, `schedule-parity-golden.mjs`, `nostalgex-episode-order-smoke.mjs`, `nostalgex-schedule-order-smoke.mjs`, `nostalgex-collections-smoke.mjs`, `play-to-end-smoke.mjs`, and the `test:episode-order` lines in `package.json`. Both branches carry the identical engine. The review fixes: a programme picked ahead no longer splits a pair, a show is its server id and not its title, a second copy of an episode does not air, and the second of a pair airs even when another channel has it on (pinned by the golden case `plex-denver-pairs-kept`).
+- `plex-tuner.html`: every episode (Plex, Jellyfin, Emby) now carries `seTag` ("S01E04", the string already built for `meta`); without it CLASSIC RERUNS falls back to library order. The engine's show identity is `showKey` (Plex `grandparentRatingKey`, Jellyfin and Emby `SeriesId`), with the year as the fallback. The scan already set both on every episode, on all three backends (the two episode literals in `plex-tuner.html`), so nothing was empty and nothing needed filling. A library saved before this has no `seTag`, so it is read back from the item's `meta` when the cache is restored (`restoreSeTags`). `LIBRARY_SCAN_REVISION` stays 3: `play-to-end-smoke.mjs` pins it, and that file is the Apple TV's.
+- An EPISODE ORDER row on the CHANNELS & BUNDLES list page, under Watershed: a real button that shows CLASSIC RERUNS or SHUFFLE and cycles on a press, with the Apple TV's words ("Two episodes of a show back to back, in order." or "One episode at a time, picked at random.", then "Movie channels are not affected."). Saved in localStorage `nostalgex_episode_order`; the default is no key, as on the Apple TV. The page hands the choice to the engine at load and on every press, and builds every schedule again. A press that does not save changes nothing.
+- The Docker image gets all of it from the same page: nothing here sits inside a `selfhost:strip` block (checked by cutting the strip blocks out of `plex-tuner.html` the way the builder does and finding every new piece still there). `npm run build:selfhost` was not run.
+- New test `scripts/episode-order-browser-smoke.mjs` (`npm run test:episode-order:browser`, not part of `npm test`): 51 checks at desktop, 960x540 at DPR 2 and phone width, on a Jellyfin stub with four shows of numbered episodes, two of them different shows with one name ("Twin Show"). It checks `showKey` and `year` on every episode, that same-title shows do not pair, and names the one place a pair cannot continue: across midnight, where each day is packed from its own seeded spot. It fails on the page before this change.
+
+**Tests run (one at a time, load under 4 before each, no full suite).** `test:schedule-parity` 66, `test:episode-order` 25, `test:schedule` 12, `test:play-to-end` 48, `test:collections` 59, `test:episode-order:browser` 51. `test:play-to-end` failed once, on the scan-revision pin, when I had bumped the revision; fixed by the `meta` read-back above.
+
+**Half-done.** Plex and Emby episodes get `seTag` and `showKey` from the same lines the code already used, but only Jellyfin was run in a browser.
+
+**Next.** Roku ports the engine change (it copies this JS).
+
+## 2026-11-19 (web 1.0.24-next: weather search fixes and the library choice a sign-in owes)
+
+**Shipped.** Nothing. This is the web and Docker next-release integration branch, `web/1.0.24-next`, off `origin/main` (4fac0f4d). It is not pushed, `tunerVersion` is still 1.0.23 and there is no `tuner-v` tag.
+
+**Why.** Work is banked on one branch per product until a release is cut. Two things are on it so far.
+
+**Changed.**
+- Merged `web/weather-search-fixes` (8b1084b7): a failed place-list load is never remembered, the place search shows up to 36 matches, and a place with no radar coverage gets a loop without the radar. The cities1000 list is not on it (`site/weather-cities1000` stays separate).
+- The library picker relaunch gap (Apple TV #337, Roku #331, Android #338). The web tuner had it. The landing page saves the sign-in to localStorage before CHOOSE YOUR LIBRARIES, and the picker was only offered to a visit that came straight from a sign-in (`libraryPickAllowed` and `signInPending` live in memory). A new browser session (closed tab, restarted browser, TV browser relaunch, a Docker page opened again) restored the saved login and read every library without asking. Proved first on the page as it was: sign in, picker up, new browser context carrying the old localStorage and no sessionStorage, no picker and `lib1,lib2` both read. A reload in the same tab was fine, because sessionStorage still held the sign-in.
+- The fix is the Apple TV's `pickOwed`: `plex-tuner.html` keeps `nostalgex_library_pick_owed` in localStorage, set when a sign-in begins its choices, cleared by CONTINUE, by a sign-in with nothing to choose, by sign-out and by a refused login. A launch that finds it owed shows the picker again before any scan, with the choices as they are (the sign-in already started them again; a relaunch does not reset them). Saving a library choice in Settings clears it too. A relaunch that cannot read the libraries keeps it owed for the next one. Web only: a relaunch waits 15 seconds for the library list, then hands over to the loading screen (which has START OVER) so an unreachable server does not leave the viewer on the picker's one quiet line.
+- New test `scripts/library-pick-owed-browser-smoke.mjs` (`npm run test:library-picker:owed`, not part of `npm test`, like the other browser smokes). 43 checks at desktop, 960x540 at DPR 2 and phone width. On the page before the fix it fails 9 checks, including the relaunch.
+
+**Tests run (the weather and picker ones only, one at a time, load under 4 before each).** `test:library-picker:owed` 43 passed; `test:library-picker` 167; `test:library-selection` 26; `test:library-picker:browser` 141; `test:weather` 45; `test:weather:browser` 214. No full suite.
+
+**Half-done.** Plex was not driven through a relaunch in the browser: the gate is the same function for every backend and the Jellyfin stub exercises it, but the Plex path has no relaunch check of its own.
+
+**Next.** Cross-product: Apple TV has the fix on `appletv/picker-owed`, Roku has #331 open for it, Android #338. The Roku engine copy does not include `plex-tuner.html`, so there is no Roku port from this change.
+
 ## 2026-11-19 (Roku sideload: a Plex sign-in from a seed page, for stand-in Plex servers)
 
 **State.** Branch `roku/1.0.14`. A sideload tool; a store build never reads it.
 
-**Why.** A stand-in Plex server on the home network cannot be signed in to through plex.tv. The Plex memory pass on the stick (brytenyte's sizes) needs one.
+**Why.** A stand-in Plex server on the home network cannot be signed in to through plex.tv. The Plex memory pass on the stick (a Discord user's sizes) needs one.
 
 **Changed.** A sideloaded build (IsDev) with `nx_plex_seed_url` in its manifest, signed out, signs in from that address: the page answers `{ token, account: { id, name }, servers: [{ name, machineIdentifier, uri }] }` and `NxPlexApplySeed` saves it as a sign-in saves its own (token, kind, servers reached at their address and already checked, every server on, the library pick owed, `devSeed`). A seeded sign-in is never sent to plex.tv, which does not know the token (`PlexSignInTask`). `launchLoad` goes to the seed instead of the connect screen. Signing out clears it and the next launch seeds again.
 
@@ -231,7 +318,7 @@ What it shows. The gate waits when the projection reaches the stop line and appl
 
 **State.** Branch `roku/1.0.14`. Not pushed, not seen on a stick yet.
 
-**Why.** brytenyte (Stick 4K, Plex, only his biggest server on) is ended by the OS after the channel build with no message. Jellyfin and Emby already stop reading at a ceiling and keep a partial library; the Plex scan had no check at all, and held a whole section's raw rows (6 to 10 KB each, with the Media and Stream lists) beside the records made from them.
+**Why.** A Discord user (Stick 4K, Plex, only the biggest server on) is ended by the OS after the channel build with no message. Jellyfin and Emby already stop reading at a ceiling and keep a partial library; the Plex scan had no check at all, and held a whole section's raw rows (6 to 10 KB each, with the Media and Stream lists) beside the records made from them.
 
 **Changed.** A film (or other non-show) section is read 300 a page and each page made into records at once, the raw page dropped (`NxPlexScanPages`); after each page `NxScanMemoryFull` asks the same projected-peak rule as the Jellyfin scan, and a full memory keeps what was read and counts the rest from the sections' own totalSize (`NxPlexSectionTotal`, `NxPlexNoteCut`), so the cut line and ABOUT's MEMORY lines read as they do for Jellyfin. A show section keeps its two requests (the show list, then one allLeaves a show) and is checked after each batch of 25 shows; the later sections are never started once a cut is made. A failed page skips its section and leaves none of its records behind, as before. The check before the channel build already covers the build for every backend.
 
@@ -239,13 +326,13 @@ What it shows. The gate waits when the projection reaches the stop line and appl
 
 **Tests.** `MemoryBudgetTests` (8 more cases on a fake Plex of 1,000 films and 20 shows: everything read at low memory, a cut after the first page of films with the totals counted, a cut after a batch of shows, a scan that began at 70%, a failed page leaving nothing behind), 49 pass. The Plex request path has a test hook (`nxPlexTestNet`) that is never set in the app.
 
-**Half-done.** Not on a stick: whether a Plex library of brytenyte's size now stops under its limit is the stick pass. Plex reads a show's episodes as it always did; that is what lazy episodes (branch `roku/lazy-episodes`) changes later.
+**Half-done.** Not on a stick: whether a Plex library of that user's size now stops under its limit is the stick pass. Plex reads a show's episodes as it always did; that is what lazy episodes (branch `roku/lazy-episodes`) changes later.
 
 ## 2026-11-19 (Roku 1.0.14: no silent quit at the channel build, a message instead)
 
 **State.** Branch `roku/1.0.14`. Not pushed, not seen on a stick.
 
-**Why.** brytenyte (Stick 4K, Plex, only his biggest server on): the app reads, starts building the channels and drops to the Roku home screen with no message. The scan's guard covers Jellyfin and Emby only, and only while they read; nothing looked at memory before the build, which takes about half again what the load added since it began (measured: 17% to 68% at a 256 MB limit, 45% to 58% at 150 MB).
+**Why.** A Discord user (Stick 4K, Plex, only the biggest server on): the app reads, starts building the channels and drops to the Roku home screen with no message. The scan's guard covers Jellyfin and Emby only, and only while they read; nothing looked at memory before the build, which takes about half again what the load added since it began (measured: 17% to 68% at a 256 MB limit, 45% to 58% at 150 MB).
 
 **Changed.** Before the channel build, on every backend, `NxBuildRoomFor` projects the peak (memory now plus half of what the load added since it began, `nxScanMemBase`) and refuses at 95% of the limit or more. A TV that gives no reading is let through. Refused: nothing is built or saved, so the saved library and guide stay as they were. With a guide on screen (a launch refresh) it stays and says nothing, as for a refresh that cannot read the library; the MEMORY lines in ABOUT show BUILD SKIPPED with the titles and the percent. On a first load the error says: **THIS TV RAN OUT OF ROOM BEFORE BUILDING CHANNELS FROM 21,093 TITLES. TURN OFF A LIBRARY TO FIT.** (the cut line's words, `NxBuildRoomLine`), and the library pick is owed again, so OK at "try again" goes to CHOOSE YOUR LIBRARIES instead of reading the same libraries again.
 
@@ -269,7 +356,7 @@ What it shows. The gate waits when the projection reaches the stop line and appl
 
 **State.** Branch `roku/1.0.14`. Not pushed, not signed, not on a stick yet.
 
-**Why.** Two Discord users on 1.0.13 still lose the app to the Roku home screen during the first load (a Jellyfin library of 21,000 titles on a Stick HD and an Express; Plex servers of 600 to 800 series). On the Stick Plus a stand-in of juicextract's size (2,093 movies, 773 series, 1,541 albums, 177 collections) peaks at 226 MB of 514 (44%) and settles at 195 MB (38%): that library fits there. Nothing says yet where it stops on the smaller sticks, so the app now says what it held at each step, and a user can read it out.
+**Why.** Two Discord users on 1.0.13 still lose the app to the Roku home screen during the first load (a Jellyfin library of 21,000 titles on a Stick HD and an Express; Plex servers of 600 to 800 series). On the Stick Plus a stand-in of a second Discord user's size (2,093 movies, 773 series, 1,541 albums, 177 collections) peaks at 226 MB of 514 (44%) and settles at 195 MB (38%): that library fits there. Nothing says yet where it stops on the smaller sticks, so the app now says what it held at each step, and a user can read it out.
 
 **Changed.**
 - *The memory line* (`source/util/MemTrace.brs`): the app's own limit, the scan's ceiling for it, and the percent of the limit after the scan, the collections, the channels, the schedule and the save. Kept in the registry as `memTrace` (a sign-out clears it, as the library's other records), shown under MEMORY at the end of ABOUT. A step noted again replaces its line. No percent from a TV that cannot give one is left out.
@@ -279,71 +366,6 @@ What it shows. The gate waits when the projection reaches the stop line and appl
 **Tests.** `MemoryBudgetTests` (11 more cases: the lines, a step noted again, the registry round trip, a damaged record), `CollectionTests` (5 more: the known keys, a half read BoxSet, an empty one, a server that read nothing, the same items resolve), `MediaBrowserTests` (2 more: only the film library is asked). Static checks pass. The full suite was not re-run.
 
 **Half-done.** Not seen on a TV. The ABOUT rows are plain info lines under a MEMORY header; how they sit on the real page (scrolling, the line width) is unproven. Where the app really stops on a Stick HD (3840) or an Express (3930) is not measured.
-
-## 2026-11-27 (Apple TV 1.0.34 (59): the store cut)
-
-**State.** `appletv/1.0.34-next`, version 1.0.34, build 59 (App Store Connect's highest is 58). Not archived, not uploaded. Chad, 2026-11-27, on getting Apple TV 1.0.34, web 1.0.24 and Roku 1.0.14 ready as one free release: "alright lets do it".
-
-**In the build** (main plus the branch): Settings load status, the LOCAL WEATHER place search and radar fixes (#332), the library picker relaunch fix (#337), EPISODE ORDER with CLASSIC RERUNS now two consecutive episodes, the hourly live channel list check, tip jar signals, and the two enrichment fixes (mixed-key saves, a row keyed by type and number). No Pro or theme code, no PR #235, no contributor commits on the app delta since 1.0.33, no new launch hooks beyond the demo-mode UI test fixture. Bundled channels.json is version 50, as in 1.0.33.
-
-**Tested.** Full NostalgexTests once, serial, one simulator of its own: 1,536 tests, 35 skipped, 0 failures (the count the run printed). Then one class after review: `EnrichmentUpsertBodyTests`, 3 tests, a film and a show sharing a number both go out. Release build for generic tvOS compiles.
-
-**Not done.** Not on a TV. The privacy page and PRIVACY_POLICY.md do not list the three tip events, and the App Store privacy label was not looked at for them.
-
-## 2026-11-23 (Apple TV: an enrichment row is looked up by its type and its number)
-
-**Shipped.** Nothing. Branch `appletv/1.0.34-next`.
-
-**Why.** TMDB numbers films and shows separately, so one number can be a film and a show. The shared `media_enrichments` table's key is now the number plus the type (`tmdb_id`, `media_type`), so it holds a row for each, and a read by number (`tmdb_id=in.(...)`) can answer with two rows. The app kept rows in memory under the bare number: the second row to arrive replaced the first, a show could read a film's keywords and genres, and a show whose number a cached film had was taken as cached and never asked of TMDB.
-
-**Changed.** The in-memory cache, the "already cached" check and every lookup by a library item use `type:number` (`MediaEnrichment.cacheKey`, `PlexMediaItem.enrichmentKey`; an episode's type is `tv`). The work list is one entry per type and number. The three franchise lookups in `AppState+Franchises` use the same key. The table is still asked by number, each number once. Saves are unchanged: the row already carries `media_type`.
-
-**Disk cache.** The file format is unchanged (rows under a text key). On load each row is placed under its own type and number, so a file an older build wrote under the bare number loads as before. Going back is not safe: a file this build writes is keyed `type:number` (`movie:603`). 1.0.33 loads those rows into its in-memory cache under those keys, so the cache is not empty and `enrichmentPending` never fires, while every lookup by bare number misses. Pools are then built without networks, keywords or scores and the refill is skipped, which can repeat I-073 on the next rebuild. App Store viewers cannot go back a version; a TestFlight tester who installs an older build can. (Corrected 2026-11-27 after review; this paragraph first said an older build would just fetch again.)
-
-**Tests.** `EnrichmentKeyTests` (5, new): a film and a show that share a number each find their own row, in either arrival order; a show finds nothing when only the film is cached; a show is still on the fetch list when the table only has the film. `OMDBRelayTests` (17) and `EnrichmentCacheStoreTests` (5) follow the new key. One run of the three, 27 tests, 0 failures. No full suite.
-
-**Not done.** Not run against the live table or a real library. Roku and Android key the row by the bare number and need the same change. The web tuner was not read for it.
-
-
-## 2026-11-23 (Apple TV: enrichment saves to the shared table were refused when a batch held mixed rows)
-
-**Shipped.** Nothing. Branch `appletv/1.0.34-next`.
-
-**Found.** The shared `media_enrichments` table refuses a whole upsert request whose rows do not all carry the same keys (PGRST102 "All object keys must match", HTTP 400). A `MediaEnrichment` row leaves out a key it has no value for (IMDb id, franchise id and name, the five OMDb fields), and `SupabaseService.upsertEnrichments` sent up to 200 rows of any shape in one request. A request holding, say, one film in a collection and one that is not was refused whole, the app printed "Supabase upsert failed: HTTP 400", then "Saved N enrichments to Supabase" all the same, and carried on. A request of one row, or of rows that happened to match, went through.
-
-**How long.** The upsert and the optional IMDb id are both in the first enrichment commit (2026-04-08, in the pre-public history), so the code has had the fault from its first day. An App Store build could not reach the table before the Supabase address and key came in through `Config.xcconfig` (2026-10-11); `v1.0.26` is the first tag that holds that change, and it also holds the franchise keys (2026-10-10) that make film rows differ from each other. Whether a given archive carried the key cannot be read from git.
-
-**What a viewer got, from the code.** `EnrichmentService.enrichItems` asks TMDB for every id the shared table has no row for; the disk cache is not consulted there (it is read on a snapshot restore only). So a title whose save was refused was fetched from TMDB again on every full library load, on that device and on every other, with the "Fetching metadata" step repeating, and the save refused again whenever the batch was mixed. An IMDb rating learned from OMDb in such a pass lived in memory and the disk cache but not in the table; on the next load the title's fresh TMDB row (or the table's older row) replaced it without the rating, and OMDb lookups are capped at 50 a load, so a rating could be lost and have to be looked up again. Channels gated on an IMDb rating leave out a title with no rating. Not measured: how many saves were refused in the field, or how many titles a real library lost from a gated channel.
-
-**Changed.** `SupabaseService.upsertBodies` groups the rows by the keys they carry and sends each group in its own requests of up to 200. A key is still left out and never sent as null, because a null would overwrite what another device saved. Nothing else is ported from the branch this came from: no new columns are written.
-
-**Tests.** `EnrichmentUpsertBodyTests` (2, new): eight rows of five shapes go out as five requests, each with one set of keys, every row once, no nulls; 450 like rows split 200, 200, 50. Against the live table, two rows it already held were written back unchanged: both in one request, as the app sent before, 400 PGRST102; each in its own request, 200 and 200; both rows read back identical. No row was added or removed.
-
-**Half-done.** The web tuner and Roku build their upsert rows another way (`scripts/nostalgex-enrichment.js`, `roku/source/enrich/Enrichment.brs`) and were not read for the same fault. The "Saved N enrichments" line still prints after a refused request.
-
-
-## 2026-11-22 (Apple TV 1.0.34: the faster live channel list is in, N-074)
-
-**State.** On `appletv/1.0.34-next`. Chad, 2026-11-22: "the hevc fix and faster channel - why don't we add that?" The work held on `appletv/live-channels-faster` since 2026-11-16 (the entry of that date below) is cherry-picked here. It was held for release timing only. Not archived, the build number is untouched.
-
-**What a TV does now.** It asks nostalgex.app for channels.json at launch, on return to the foreground and from the 15 minute background loop, but at most once an hour (`ChannelConfigStore.checkInterval`, 3600 s; 1.0.33 asked once a day). An unchanged file is a 304. A newer valid one is applied from the library already in memory, with no server scan, the next time the viewer is on the guide, or at the next launch. Never while a programme is full screen and never during a load. The header says UPDATING LIBRARY, then GUIDE READY. So a published change reaches an open TV within about an hour and 15 minutes at most if it sits on the guide, and otherwise when the viewer next comes back to the guide.
-
-**With the 1.0.34 work.** The pick applied clean in code; only this file conflicted.
-- Settings load status: an apply sets the same state a background refresh does, so the Settings bar reads UPDATING LIBRARY and then GUIDE READY with the header. An apply never starts under Settings.
-- EPISODE ORDER: the choice is a saved setting, not part of channels.json, and an apply does not touch it. One line added: the apply now drops the scheduler's memo (`DailyManifestScheduler.invalidateMemo`). The memo's key is a pool's size and its first and last title, so a rule change that swapped titles in the middle of a pool could have kept serving the old day until midnight. The day packed after an apply is packed under the viewer's order.
-
-**Tested.** `LiveChannelRulesTests` (9), `EpisodeOrderTests` (16) and the new `BigLibraryHarness.testALiveRulesApplyKeepsTheEpisodeOrder` (2,000 titles, SHUFFLE picked, apply, still SHUFFLE and the day aired is the SHUFFLE day), once, on the simulator: 26 pass. Not run: the full suite, the 30,000 title measurement again, and anything on a TV. No real download of a new channels.json was exercised here; the fetch is switched off under tests.
-
-## 2026-11-21 (Tip jar signals)
-
-**State.** On `appletv/1.0.34-next`. Chad, 2026-11-21: "don't we want analytics on tips as well?" The tip jar sent nothing until now, on purpose, to stay off the privacy label. That choice is reversed.
-
-**Three signals, one parameter.** `tip.started`, `tip.completed` and `tip.failed`, each with `tier` = `popcorn`, `tv_dinner` or `pizza_night`. No quantity, price, total, currency or transaction id, and no programme or channel. Started fires when the viewer confirms and the App Store sheet is asked for. Completed fires with the thank-you card, so once per transaction, and also for an Ask to Buy tip approved later. Failed fires when a tip the viewer started is refused or fails verification. A cancel and a wait for approval send nothing.
-
-**Before this ships.** The App Store privacy label and `nostalgex.app/privacy` need a look: these are anonymous counts, but "Purchases" may need declaring. `TipJarTests` pins the names and the one key, so a new parameter fails there first.
-
-**Tested.** Simulator: `TipJarTests` (21), `AnalyticsEventTests`, `AnalyticsGateTests`. No purchase was run.
-
 
 ## 2026-11-19 (EPISODE ORDER: CLASSIC RERUNS and SHUFFLE, I-103)
 
@@ -361,7 +383,7 @@ What it shows. The gate waits when the projection reaches the stop line and appl
 
 **Looked at in the simulator** (`EpisodeOrderWalkTests`, demo mode, muted): the row reads CLASSIC RERUNS with its line, a press makes it SHUFFLE, the guide's episode channel changes from two of a show in a row to one at a time, and the film playing carries on from where it was.
 
-**Not built.** IN ORDER, MARATHON, CONTINUE WATCHING and a per-channel order are held for Plus (Chad). No saved position exists. `EpisodeOrder` is an enum that takes more cases.
+**Not built.** IN ORDER, MARATHON, CONTINUE WATCHING and a per-channel order are not built. No saved position exists. `EpisodeOrder` is an enum that takes more cases.
 
 **Known edges.** On the premiere channel a title added this week is slotted by airtime and can land between the two episodes of a pair. The filler loop can start on the second episode of a pair, which then airs alone. Once every other show in a day's ordering has run out, the last show airs alone, pair after pair, as it did before.
 
@@ -395,8 +417,6 @@ What it shows. The gate waits when the projection reaches the stop line and appl
 
 **Next.** None for this post.
 
-
-
 ## 2026-11-18 (Roku: LOCAL WEATHER place search shows up to 36 matches, and a place with no radar plays a three screen loop, #332)
 
 **Why.** The same three changes the Apple TV and the web tuner got today, so CH 299 behaves the same on all three. On the Apple TV a failed read of the place list (`places/meta.json`) was remembered until relaunch, because a search cancelled by the next keystroke counted as a failure. GitHub #332 asked for more than 8 matches for a postcode with many localities, and for no RADAR NOT AVAILABLE slide outside the US, Canada and Germany.
@@ -419,6 +439,7 @@ What it shows. The gate waits when the projection reaches the stop line and appl
 **Tests.** `WatershedGoldenTests` (watershed-gate), 37 cases (32 before): a first and a second stall tried again, a third giving up, a clip that is playing, finished or stopped by then left alone, and a wait under a minute. With the stall action passing the clip's own state through, four fail. `tests/run.sh` ends in ALL TESTS PASSED.
 
 **Half-done.** Not seen on a TV. The stall happened once and can't be made on demand, and the tests run `source/`, not the components, so the timer's wiring in GuideView is covered only by `pr-check.sh`'s static checks.
+
 ## 2026-11-18 (Roku: a library pick still owed brings CHOOSE YOUR LIBRARIES back at the next launch, #331)
 
 **Why.** A Jellyfin or Emby sign-in, and a Plex one, saves `servers` before CHOOSE YOUR LIBRARIES is shown. `launchLoad` started the scan whenever `servers` was saved, so closing the app on the picker (Home, a crash, a power cut) skipped it at the next launch and read every library. Seen once on a TCL Roku TV against a lab Emby (#331).
@@ -431,16 +452,19 @@ What it shows. The gate waits when the projection reaches the stop line and appl
 
 **Half-done.** Only Home was tried on the TV, not a crash or a power cut, and only on Emby: the Plex path is untested on a TV. From reading only, the Apple TV may have the same gap: `needsLibrarySelection` is held in memory, and a launch with credentials restores the saved library or loads it without asking for the libraries.
 
-## 2026-11-18 (Roku: a WATERSHED hold clip stuck in buffering is restarted, #334)
+## 2026-11-18 (Apple TV: closing the app on CHOOSE YOUR LIBRARIES)
 
-**Why.** The hold clip that keeps the stick awake under WATERSHED was restarted on `finished` and `error` only. Once, on a TCL 55R617, it went to `buffering` and stayed there for about 40 minutes, so the 9 PM opening didn't happen until a key press (#334).
+**Found.** tydude001 found it on Roku (#331): sign in, stop on the library picker, close the app, open it again, and the picker is skipped and every library is read. Nobody had run the Apple TV. Run on 1.0.33 (tag v1.0.33) against a stand-in Emby and a stand-in Jellyfin, each with two libraries, on a throwaway tvOS simulator with the app's real stores: after the relaunch the guide loaded and the server log shows `/Items` for both libraries, with the picker never shown. Plex has no stand-in for plex.tv, so it was measured at the AppState level (a second AppState over the same stores, driven through the calls the launch makes): sections read ["1", "2"], picker not shown. Not a process kill.
 
-**Changed.** While the clip buffers, a 10 s one-shot timer (`m.keepStall`) runs. Every other state from the clip stops it. A clip still buffering when it fires counts as a failure, as `error` does (`NxKeepAliveStallAction`, `source/guide/Watershed.brs`): it is restarted, and the third failure, stalls and errors together, stops it until a channel starts. `NxKeepAliveAction` is unchanged, so buffering alone still does nothing. LOCAL WEATHER's music shares the Video node and the watch, so it gets the same check. As with errors, the count is reset only when the clip or the music starts, so three stalls across one long hold stop it. After a stall restart the timer is re-armed in `onKeepStall` itself, because a restart that sticks in buffering may not change the clip's state, and the state change is what starts it otherwise.
+**Changed.** Branch `appletv/picker-owed` off `appletv/weather-search-fixes`, not pushed. A pick-owed flag (`LibrarySectionSelectionStore.pickOwed`) is saved when a sign-in reaches the picker step. CONTINUE, a sign-in with nothing to choose, and sign-out clear it. A launch with it set (`resumeLibraryPickIfOwed`, called from RootView after the saved sign-in is read) re-reads the libraries and shows the picker, with the loading screen up meanwhile. If the server cannot be reached on that launch the flag stays set. `PickerOwedTests` (7) pass with `LibrarySelectionTests`, `HiddenLibrarySelectionTests`, `LibraryPickerGoldenTests` and `SessionDurabilityTests`.
 
-**Tests.** `WatershedGoldenTests` (watershed-gate), 37 cases (32 before): a first and a second stall tried again, a third giving up, a clip that is playing, finished or stopped by then left alone, and a wait under a minute. With the stall action passing the clip's own state through, four fail. `tests/run.sh` ends in ALL TESTS PASSED.
+**Verified.** The same Emby kill and relaunch on this branch: the picker comes back and the server log shows no `/Items` request before the choice.
 
-**Half-done.** Not seen on a TV. The stall happened once and can't be made on demand, and the tests run `source/`, not the components, so the timer's wiring in GuideView is covered only by `pr-check.sh`'s static checks.
+**Half-done.** Two known edges, left as they are. A multi-server Plex relaunch where only one server answers gives a non-empty list, so if that is a single non-hidden section the flag clears and everything is scanned. TRY AGAIN after an unreachable launch loads the guide with every library while the flag stays set, so the picker returns on the next launch and resets any Settings choices made in between.
 
+**Reviewed.** The resume step now shows the step rail and START OVER straight away (headline "FINDING YOUR SERVERS..."), and a START OVER while the libraries are being read no longer lets the picker appear for a signed-out app. The unit tests that end on the picker clear the flag in tearDown so the host app's defaults are not left owing a pick.
+
+**Unverified.** Not run on an Apple TV, and the fix was not run as a process kill on Jellyfin or Plex (Jellyfin shares the Emby path in the code; Plex is covered by the AppState tests only). Hidden Jellyfin libraries were not exercised.
 
 ## 2026-11-18 (publish Thanksgiving marathon)
 
@@ -457,6 +481,32 @@ What it shows. The gate waits when the projection reaches the stop line and appl
 **Half-done.** None.
 
 **Next.** None for this post.
+
+## 2026-11-16 (Apple TV 1.0.34 polish: the loading pattern in Settings)
+
+**State.** Branch `appletv/1.0.34-polish` off `ca4f530f` (1.0.33 build 58, already uploaded; this is not in it). Not pushed.
+
+**Why.** Chad, from Android's test: stay in Settings when a server is switched and see the progress there, not be sent back to the guide. Checked first: the Apple TV already keeps the viewer in Settings (it is pushed over the guide; only Disconnect returns to sign-in, because the credentials go), and the guide behind it shows CHANNEL GUIDE IS CHANGING. What was missing was the progress inside Settings, which showed only "Scanning..." on one row.
+
+**Changed.** A read-only status line over the foot of SERVERS & ACCOUNTS (which holds LIBRARIES) and CHANNELS & BUNDLES, not focusable and outside the scroll so no row moves. It reads state the load already keeps and changes none of it: BUILDING CHANNELS, READ n TITLES, the library being read (or the step after it), then BUILDING SCHEDULE for the last phase (TUNING IN in the full-screen loader), then GUIDE READY: n TITLES for 4 s. A refresh behind the guide says UPDATING LIBRARY: n TITLES READ, as the header does. The words are `LoadNotice` (new `buildingChannels`, `buildingSchedule` and `detailLine`, the last shared with the guide's block) and Android's step names. `SettingsLoadStatus` is the logic, `SettingsLoadStatusBar` the view.
+
+**Tested.** `SettingsLoadStatusTests` (9) with `LoadNoticeTests`: 13 pass. One simulator walk (`SettingsLoadStatusWalkTests`, `-uiTestGuideLoadFixture changing`): the line shows on CHANNELS & BUNDLES and SERVERS & ACCOUNTS with the exact text and not on PLAYBACK & PICTURE. Not run: a real server switch, a real TV. The BUILDING SCHEDULE and GUIDE READY lines are covered by the unit tests and the fixture (`schedule`), not shown on screen in the walk.
+
+## 2026-11-16 (Apple TV: a new channels.json reaches a TV within the hour, N-074)
+
+**State.** Branch `appletv/live-channels-faster` off `appletv/1.0.33-weather` (`ded0ffc0`). Not pushed, not archived; the build number is untouched. Chad: "i would want it to be sooner than 24 hours - if that is going to make it unstable i dont want to, but the idea is to push something easily and quickly."
+
+**Changed.**
+- Check: at launch (after a snapshot restore), when the app returns to the foreground and from the 15 minute background loop, but never more than once in `ChannelConfigStore.checkInterval` (3600 s, the one constant). The request is conditional (ETag), so an unchanged file is a 304; a failed check also waits the hour.
+- Apply: a newer valid `version` is applied by `rebuildChannelsFromLoadedLibrary` (AppState+LiveChannels): every enabled channel's pool is filtered again from the library in memory, no server scan, then the franchises and collections and the lineup are rebuilt. Rules in `LiveChannelRules`: only when the kept `version` is newer than the one the guide was built from (`nostalgex_channels_applied_version`, set by every full load and every apply; absent means the bundled copy's), never while a programme is full screen or a load or rebuild is running, only when the guide is the front screen (TunerView says so, so not under Settings) or at launch before anything plays. Whatever is playing keeps playing: its channel is swapped for the rebuilt one with no reload. The header says UPDATING LIBRARY while it runs and GUIDE READY after, as the loading pattern does, and the snapshot is saved so the next launch starts from the new rules.
+- A same, older or invalid file never reaches this: `ChannelConfigStore.store` refuses it, so the kept version does not move.
+- Not re-run on this path: enrichment (it needs the network); titles that a new rule needs OMDb data for get it at the next full load.
+
+**Measured.** 30,000 titles (3,000 movies, 18,000 episodes of 297 shows, 9,000 music videos), a fresh AppState restored from the snapshot, then the rebuild, on the tvOS simulator on a Mac under heavy load (load average 20 and up, other work running): the rebuild took 5.3 s, peak memory 167 MB against 123 MB before (+44 MB), and the longest main-thread block was 64 ms. The first version took 2,055 ms on the main thread, from the franchise builder; it now uses the existing off-main builder. Not measured on an Apple TV; the Mac is faster than the device, so expect the wall time to be longer there, with the main thread free. Result: applying while the app is open is on (`LiveChannelRules.appliesWhileRunning`); set it false and a new copy waits for the next launch.
+
+**Rollback.** The apps accept a channels.json only if its `version` is at least the one they hold (and its `formatVersion` is at most 1). So a rollback is the old content published under a HIGHER `version`; republishing the old file with its old number is ignored. Do not edit a published `version` downward.
+
+**Tested.** `LiveChannelRulesTests` (9): unchanged and older do nothing, newer applies on the guide, nothing applies during playback or a load or under Settings, it waits for the next time on the guide, a newer one applies at launch, applying-while-running off waits for launch, an invalid download leaves nothing to apply and a rollback under a higher version does, the check is due once an hour, the applied version starts as the bundled one. Measurement: `BigLibraryHarness.testLiveRulesRebuildFromSnapshot` (`TEST_RUNNER_NOSTALGEX_BIGLIB_N=30000`). 76 tests of the changed and neighbouring classes pass. No device run.
 
 ## 2026-11-16 (site: Android TV page, web and Docker release notes, weather on /channels)
 
@@ -507,30 +557,6 @@ What it shows. The gate waits when the projection reaches the stop line and appl
 - The block's second line (Settings and the guide) follows the phase: READ n TITLES and the library being read, then BUILDING CHANNELS: i OF n, then BUILDING SCHEDULE. It used to keep saying MOVIES: 450 OF 450 through the whole build. GUIDE READY: n TITLES at the end.
 - `scripts/loading-state-browser-smoke.mjs`: a switch from Settings checks all of it; a check about a removed feature (the hidden-libraries switch) is dropped.
 
-## 2026-11-18 (Apple TV: closing the app on CHOOSE YOUR LIBRARIES)
-
-**Found.** tydude001 found it on Roku (#331): sign in, stop on the library picker, close the app, open it again, and the picker is skipped and every library is read. Nobody had run the Apple TV. Run on 1.0.33 (tag v1.0.33) against a stand-in Emby and a stand-in Jellyfin, each with two libraries, on a throwaway tvOS simulator with the app's real stores: after the relaunch the guide loaded and the server log shows `/Items` for both libraries, with the picker never shown. Plex has no stand-in for plex.tv, so it was measured at the AppState level (a second AppState over the same stores, driven through the calls the launch makes): sections read ["1", "2"], picker not shown. Not a process kill.
-
-**Changed.** Branch `appletv/picker-owed` off `appletv/weather-search-fixes`, not pushed. A pick-owed flag (`LibrarySectionSelectionStore.pickOwed`) is saved when a sign-in reaches the picker step. CONTINUE, a sign-in with nothing to choose, and sign-out clear it. A launch with it set (`resumeLibraryPickIfOwed`, called from RootView after the saved sign-in is read) re-reads the libraries and shows the picker, with the loading screen up meanwhile. If the server cannot be reached on that launch the flag stays set. `PickerOwedTests` (7) pass with `LibrarySelectionTests`, `HiddenLibrarySelectionTests`, `LibraryPickerGoldenTests` and `SessionDurabilityTests`.
-
-**Verified.** The same Emby kill and relaunch on this branch: the picker comes back and the server log shows no `/Items` request before the choice.
-
-**Half-done.** Two known edges, left as they are. A multi-server Plex relaunch where only one server answers gives a non-empty list, so if that is a single non-hidden section the flag clears and everything is scanned. TRY AGAIN after an unreachable launch loads the guide with every library while the flag stays set, so the picker returns on the next launch and resets any Settings choices made in between.
-
-**Reviewed.** The resume step now shows the step rail and START OVER straight away (headline "FINDING YOUR SERVERS..."), and a START OVER while the libraries are being read no longer lets the picker appear for a signed-out app. The unit tests that end on the picker clear the flag in tearDown so the host app's defaults are not left owing a pick.
-
-**Unverified.** Not run on an Apple TV, and the fix was not run as a process kill on Jellyfin or Plex (Jellyfin shares the Emby path in the code; Plex is covered by the AppState tests only). Hidden Jellyfin libraries were not exercised.
-
-## 2026-11-16 (Apple TV 1.0.34 polish: the loading pattern in Settings)
-
-**State.** Branch `appletv/1.0.34-polish` off `ca4f530f` (1.0.33 build 58, already uploaded; this is not in it). Not pushed.
-
-**Why.** Chad, from Android's test: stay in Settings when a server is switched and see the progress there, not be sent back to the guide. Checked first: the Apple TV already keeps the viewer in Settings (it is pushed over the guide; only Disconnect returns to sign-in, because the credentials go), and the guide behind it shows CHANNEL GUIDE IS CHANGING. What was missing was the progress inside Settings, which showed only "Scanning..." on one row.
-
-**Changed.** A read-only status line over the foot of SERVERS & ACCOUNTS (which holds LIBRARIES) and CHANNELS & BUNDLES, not focusable and outside the scroll so no row moves. It reads state the load already keeps and changes none of it: BUILDING CHANNELS, READ n TITLES, the library being read (or the step after it), then BUILDING SCHEDULE for the last phase (TUNING IN in the full-screen loader), then GUIDE READY: n TITLES for 4 s. A refresh behind the guide says UPDATING LIBRARY: n TITLES READ, as the header does. The words are `LoadNotice` (new `buildingChannels`, `buildingSchedule` and `detailLine`, the last shared with the guide's block) and Android's step names. `SettingsLoadStatus` is the logic, `SettingsLoadStatusBar` the view.
-
-**Tested.** `SettingsLoadStatusTests` (9) with `LoadNoticeTests`: 13 pass. One simulator walk (`SettingsLoadStatusWalkTests`, `-uiTestGuideLoadFixture changing`): the line shows on CHANNELS & BUNDLES and SERVERS & ACCOUNTS with the exact text and not on PLAYBACK & PICTURE. Not run: a real server switch, a real TV. The BUILDING SCHEDULE and GUIDE READY lines are covered by the unit tests and the fixture (`schedule`), not shown on screen in the walk.
-
 ## 2026-11-16 (Apple TV 1.0.33 (58): Select on the bundle stripe jumps to the bundle)
 
 **Why.** Chad, testing 58: "the bundle strip - you should be able to select it and the guide should go to the first item in that bundle - right now it just opens the left menu that is hidden - this should be globally changed". Roku already does this.
@@ -538,22 +564,6 @@ What it shows. The gate waits when the projection reaches the stop line and appl
 **Changed.** Select on the stripe now scrolls the guide so the first channel of the stripe's bundle is at the top and puts focus on that row (`GuideStripes.selectTargetRow`, `ChannelGuideView.selectStripeBundle`); the stripe is drawn from the rows, so it stays where it was and Left puts the viewer back on it. Left from the stripe opens the hidden bundle list, where Select used to; Select in the list still jumps and closes it, Menu closes it without a jump, Up and Down on the stripe still step through bundles and wrap. A run that is no bundle has nothing to jump to and Select does nothing. Moving focus onto the row pulled the list back (measured on the simulator: the scroll offset ran 390 to 0 over a second), so the top position is set again 0.1 s and 0.4 s after focus lands.
 
 **Tested.** `GuideStripeSelectTargetTests` (3) and `GuideStripesTests`; `GuideStripeFocusTests` (3 UI tests on the simulator, including Select landing on channel 7 with its row at the top of the guide, Left from the stripe opening the list and Menu closing it). Not tried on a TV.
-
-## 2026-11-16 (Apple TV: a new channels.json reaches a TV within the hour, N-074)
-
-**State.** Branch `appletv/live-channels-faster` off `appletv/1.0.33-weather` (`ded0ffc0`). Not pushed, not archived; the build number is untouched. Chad: "i would want it to be sooner than 24 hours - if that is going to make it unstable i dont want to, but the idea is to push something easily and quickly."
-
-**Changed.**
-- Check: at launch (after a snapshot restore), when the app returns to the foreground and from the 15 minute background loop, but never more than once in `ChannelConfigStore.checkInterval` (3600 s, the one constant). The request is conditional (ETag), so an unchanged file is a 304; a failed check also waits the hour.
-- Apply: a newer valid `version` is applied by `rebuildChannelsFromLoadedLibrary` (AppState+LiveChannels): every enabled channel's pool is filtered again from the library in memory, no server scan, then the franchises and collections and the lineup are rebuilt. Rules in `LiveChannelRules`: only when the kept `version` is newer than the one the guide was built from (`nostalgex_channels_applied_version`, set by every full load and every apply; absent means the bundled copy's), never while a programme is full screen or a load or rebuild is running, only when the guide is the front screen (TunerView says so, so not under Settings) or at launch before anything plays. Whatever is playing keeps playing: its channel is swapped for the rebuilt one with no reload. The header says UPDATING LIBRARY while it runs and GUIDE READY after, as the loading pattern does, and the snapshot is saved so the next launch starts from the new rules.
-- A same, older or invalid file never reaches this: `ChannelConfigStore.store` refuses it, so the kept version does not move.
-- Not re-run on this path: enrichment (it needs the network); titles that a new rule needs OMDb data for get it at the next full load.
-
-**Measured.** 30,000 titles (3,000 movies, 18,000 episodes of 297 shows, 9,000 music videos), a fresh AppState restored from the snapshot, then the rebuild, on the tvOS simulator on a Mac under heavy load (load average 20 and up, other work running): the rebuild took 5.3 s, peak memory 167 MB against 123 MB before (+44 MB), and the longest main-thread block was 64 ms. The first version took 2,055 ms on the main thread, from the franchise builder; it now uses the existing off-main builder. Not measured on an Apple TV; the Mac is faster than the device, so expect the wall time to be longer there, with the main thread free. Result: applying while the app is open is on (`LiveChannelRules.appliesWhileRunning`); set it false and a new copy waits for the next launch.
-
-**Rollback.** The apps accept a channels.json only if its `version` is at least the one they hold (and its `formatVersion` is at most 1). So a rollback is the old content published under a HIGHER `version`; republishing the old file with its old number is ignored. Do not edit a published `version` downward.
-
-**Tested.** `LiveChannelRulesTests` (9): unchanged and older do nothing, newer applies on the guide, nothing applies during playback or a load or under Settings, it waits for the next time on the guide, a newer one applies at launch, applying-while-running off waits for launch, an invalid download leaves nothing to apply and a rollback under a higher version does, the check is due once an hour, the applied version starts as the bundled one. Measurement: `BigLibraryHarness.testLiveRulesRebuildFromSnapshot` (`TEST_RUNNER_NOSTALGEX_BIGLIB_N=30000`). 76 tests of the changed and neighbouring classes pass. No device run.
 
 ## 2026-11-16 (Apple TV 1.0.33 (58): Chad's weather changes)
 
