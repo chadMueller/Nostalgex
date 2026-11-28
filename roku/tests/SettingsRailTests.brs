@@ -27,6 +27,7 @@ function NxRunSettingsRailTests() as Integer
     end for
     NxCheck(r, "tab of: SHOW NOW PLAYING moves from CONNECTION to PLAYBACK & PICTURE", NxSettingsTabOf("reportNowPlaying"), "playback")
     NxCheck(r, "tab of: MARK WATCHED too", NxSettingsTabOf("reportMarkWatched"), "playback")
+    NxCheck(r, "tab of: the weather rows", NxSettingsTabOf("weatherPlace") + NxSettingsTabOf("weatherUnits") + NxSettingsTabOf("weatherChannel"), "channelschannelschannels")
     for each kind in ["channelsLink", "bundle", "franchiseAll", "franchise", "franchiseCollection", "collectionsToggle", "collection"]
         NxCheck(r, "tab of: " + kind, NxSettingsTabOf(kind), "channels")
     end for
@@ -98,6 +99,7 @@ function NxRunSettingsRailTests() as Integer
         { kind: "channelsLink", inTab: "channels", inPage: "", page: "packages" },
         { kind: "channelsLink", inTab: "channels", inPage: "", page: "franchises" },
         { kind: "channelsLink", inTab: "channels", inPage: "", page: "collections" },
+        { kind: "channelsLink", inTab: "channels", inPage: "", page: "weather" },
         { kind: "header", inTab: "channels", inPage: "packages" },
         { kind: "bundle", inTab: "channels", inPage: "packages", index: 0 },
         { kind: "header", inTab: "channels", inPage: "franchises" },
@@ -108,7 +110,7 @@ function NxRunSettingsRailTests() as Integer
         { kind: "watershed", inTab: "channels", inPage: "" },
         { kind: "rescan", inTab: "servers", inPage: "" }
     ]
-    NxCheck(r, "pages: the list is the three links, then WATERSHED", NxRailRowKinds(NxSettingsRowsInTab(ch, "channels")), "channelsLink|channelsLink|channelsLink|watershed")
+    NxCheck(r, "pages: the list is the four links, then WATERSHED", NxRailRowKinds(NxSettingsRowsInTab(ch, "channels")), "channelsLink|channelsLink|channelsLink|channelsLink|watershed")
     NxCheck(r, "pages: CHANNEL PACKAGES holds its section", NxRailRowKinds(NxSettingsRowsInTab(ch, "channels", "packages")), "header|bundle0")
     NxCheck(r, "pages: FRANCHISES holds its switch and ADD ALL", NxRailRowKinds(NxSettingsRowsInTab(ch, "channels", "franchises")), "header|bundle9|franchiseAll")
     NxCheck(r, "pages: a page opens on its first row", NxSettingsFirstFocusable(NxSettingsRowsInTab(ch, "channels", "packages")).ToStr(), "1")

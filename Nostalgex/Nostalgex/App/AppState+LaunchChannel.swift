@@ -18,7 +18,8 @@ extension AppState {
         if launchMemoryApplies, let remembered = LaunchChannelMemory.channelToOpen(in: channels) {
             return remembered
         }
-        return channels.first
+        // The weather channel is a guest in the guide, never what a launch opens on by default.
+        return channels.first { !$0.isWeather } ?? channels.first
     }
 
     /// Called when the viewer tunes a channel. Saved whether or not the switch is on, so turning

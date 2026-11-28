@@ -113,6 +113,15 @@ sub init()
     m.reportClock = CreateObject("roTimespan")
 
     m.video = m.top.FindNode("video")
+    ' LOCAL WEATHER (CH 299): the channel's picture and music, WeatherView. weatherOn is true while it is tuned.
+    m.weather = m.top.FindNode("weather")
+    m.weather.ObserveField("summary", "onWeatherInfo")
+    m.weather.ObserveField("placeLabel", "onWeatherInfo")
+    m.weather.ObserveField("tempLabel", "onWeatherInfo")
+    m.weatherOn = false
+    m.weatherSummary = ""
+    m.weatherPlace = ""
+    m.weatherTemp = ""
     m.keepVideo = m.top.FindNode("keepVideo")
     m.keepVideo.mute = true
     m.keepVideo.ObserveField("state", "onKeepState")
@@ -238,7 +247,7 @@ end function
 
 sub onGuide()
     previous = m.channels
-    m.channels = m.top.guide.channels
+    m.channels = withWeather(m.top.guide.channels)
     m.stripeStale = true
     m.gaveWay = invalid
     ' One channel from the cold-boot seed while the library loads (#155):
@@ -259,6 +268,7 @@ sub onGuide()
     ' Nothing reads a channel while the list is empty (#93).
     if m.channels = invalid then m.channels = []
     if m.channels.Count() = 0 then
+        if m.weatherOn then stopWeather()
         ' Upstream's NO CHANNELS FOUND, with OK for its OPEN SETTINGS (#60).
         m.top.FindNode("notice").text = "NO CHANNELS FOUND" + Chr(10) + "Your library didn't have enough content to fill any channels. Open Settings to see which bundles your library supports." + Chr(10) + Chr(10) + "OK  OPEN SETTINGS"
         keepFocusVisible()
@@ -605,6 +615,9 @@ function renderRow(idx as Integer, y as Integer, t as LongInteger, wStart& as Lo
             ' (NxGuideFocusLiveFill). A past programme keeps its tint on both.
             if onNow and focused then
                 row.AppendChild(newRect(x, 0, w, m.rowH, NxGuideFocusLiveFill(ch.color)))
+            else if onNow and ch.weather = true then
+                ' The weather bar: the row's colour at 13%.
+                row.AppendChild(newRect(x, 0, w, m.rowH, colorOf(ch.color, "21")))
             else if onNow then
                 row.AppendChild(newRect(x, 0, w, m.rowH, colorOf(ch.color, gc.liveAlpha)))
             else if past then
@@ -777,8 +790,8 @@ sub enterStripe()
 end sub
 
 ' Up and Down jump to the previous and next bundle, scrolling so its first
-' channel is at the top; Right goes back to the rows on that bundle's first
-' channel; OK or Left opens the bundle list; Back returns to the rows.
+' channel is at the top; Right or OK goes to the rows on that bundle's first
+' channel; Left opens the bundle list; Back returns to the rows.
 function stripeKey(key as String) as Boolean
     if key = "up" or key = "down" then
         dir = 1
@@ -789,13 +802,16 @@ function stripeKey(key as String) as Boolean
             scrollToRow(m.stripeGroups[n].firstRow)
             renderGrid()
         end if
-    else if key = "right" then
-        m.focus = m.stripeGroups[m.stripeIdx].firstRow
+    else if key = "right" or key = "OK" then
+        ' OK selects the bundle (Chad 2026-11-16): the guide goes to its first channel, with focus on that row, as
+        ' the Apple TV's BundleJumpSidebar does. Back, below, closes without jumping.
+        row = NxStripeJumpRow(m.stripeGroups, m.stripeIdx)
+        if row >= 0 then m.focus = row
         m.nav = "grid"
         keepFocusVisible()
         renderGrid()
         renderInfo()
-    else if key = "OK" or key = "left" then
+    else if key = "left" then
         m.nav = "grid"
         renderGrid()
         openSidebar()
@@ -1086,6 +1102,7 @@ sub renderInfo()
     ' The progress row: the bar and the time, or a later programme's time range.
     row = m.top.FindNode("progressRow")
     row.translation = [0, y]
+
     clock = m.top.FindNode("clock")
     track = m.top.FindNode("progressTrack")
     fill = m.top.FindNode("progressFill")
@@ -1102,6 +1119,12 @@ sub renderInfo()
         dur& = b.endSec - b.startSec
         pos& = t - b.startSec
         clock.text = hms(pos&) + " / " + hms(dur&)
+        ' LOCAL WEATHER is a loop with no start or end: LIVE, with the bar full.
+        if ch.weather = true then
+            clock.text = "LIVE"
+            pos& = 1
+            dur& = 1
+        end if
         cw = clock.boundingRect().width
         clock.translation = [1100 - cw, 5]
         barW = 1100 - cw - 10
@@ -1196,7 +1219,11 @@ sub onTick()
     ' A channel that stopped trying stays stopped until the viewer tunes.
     ' A deep-linked item ends with its file, however long it stalled.
     linked = m.playing <> invalid and m.playing.linked = true
-    if NxAiringEnded(m.playing, t, m.video.state) and not m.stopped and not linked then advance(false)
+    if m.weatherOn then
+        tickWeather(t)
+    else if NxAiringEnded(m.playing, t, m.video.state) and not m.stopped and not linked then
+        advance(false)
+    end if
     warmSubtitles(t)
     if guideTimeoutDue(t) then
         print "guide: left alone for "; guideTimeoutSeconds(); " s; the channel goes full screen (GUIDE TIMEOUT)"
@@ -1223,7 +1250,7 @@ end function
 function guideTimeoutDue(t as LongInteger) as Boolean
     if m.channels = invalid or m.channels.Count() = 0 then return false
     front = not m.fullscreen and m.settings = invalid and m.promptOpen <> true and m.graceEnd = invalid and m.leaving <> true
-    playing = m.playing <> invalid and m.stopped <> true and m.video.state = "playing"
+    playing = m.playing <> invalid and m.stopped <> true and (m.video.state = "playing" or m.weatherOn = true)
     return NxGuideShouldGoFullscreen(guideTimeoutSeconds(), m.lastActivity, t, front, playing)
 end function
 
@@ -1348,6 +1375,12 @@ sub startTune(idx as Integer)
     if m.nextAiring = invalid then m.unplayedEnds = 0
     ch = m.channels[idx]
     t = nowSec()
+    ' LOCAL WEATHER draws its own picture and has no stream: nothing below applies to it.
+    if ch.weather = true then
+        startWeather(idx)
+        return
+    end if
+    if m.weatherOn then stopWeather()
     ' A hand-over starts the next airing from its beginning; a press joins
     ' what airs now part way in.
     b = m.nextAiring
@@ -2052,6 +2085,15 @@ sub layoutVideo()
         vig.width = 740
         vig.height = 555
     end if
+    ' The weather channel's picture: the whole screen in full screen, else the 16:9 picture in the middle of the
+    ' preview box (740 wide, 416 tall in its 555).
+    if m.fullscreen then
+        m.weather.translation = [0, 0]
+        m.weather.scale = [1, 1]
+    else
+        m.weather.translation = [1180, 69]
+        m.weather.scale = [0.3854, 0.3854]
+    end if
     crt.visible = m.retro
     if m.retro then
         m.flicker.control = "start"
@@ -2320,6 +2362,7 @@ sub openStrip()
 end sub
 
 sub onStripPicked()
+    if m.strip = invalid then return
     idx = m.strip.picked
     closeStrip()
     m.focus = idx
@@ -2417,6 +2460,7 @@ function npState() as Object
 end function
 
 sub onNpAction()
+    if m.np = invalid then return
     a = m.np.action
     if a = "cc" then
         if m.hasSubs then
@@ -2529,6 +2573,7 @@ sub expireSleep()
     stopTracker()
     stopPrevious()
     m.video.control = "stop"
+    if m.weatherOn then stopWeather()
     m.playing = invalid
     setFullscreen(false)
 end sub
@@ -2566,7 +2611,7 @@ sub showOsd()
             if b.year <> "" then line = line + "  " + b.year
             lines.Push({ text: line, font: "DMMono-Regular", size: 24, color: "0xFFFFFFE6" })
         end if
-        lines.Push({ text: "", font: "DMMono-Regular", size: 18, color: "0x8E8E93FF", time: true })
+        if ch.weather <> true then lines.Push({ text: "", font: "DMMono-Regular", size: 18, color: "0x8E8E93FF", time: true })
     end if
     widest = 48
     for each l in lines
@@ -2835,6 +2880,7 @@ sub enterChanging(unused = invalid as Dynamic)
     closeStrip()
     if m.sidebarOpen = true then closeSidebar()
     m.video.control = "stop"
+    if m.weatherOn then stopWeather()
     m.playing = invalid
     m.channels = []
     m.tuned = -1
@@ -3051,6 +3097,7 @@ sub onLibraryBusy()
 end sub
 
 sub onSettingsResult()
+    if m.settings = invalid then return
     result = m.settings.result
     ' A WATERSHED switch: the library task's re-check now, not in 30 s.
     m.top.reschedule = true
@@ -3073,6 +3120,11 @@ sub onSettingsResult()
     if applyGuideText() and m.channels <> invalid then
         keepFocusVisible()
         renderGrid()
+    end if
+    ' LOCAL WEATHER's place, units or switch may have changed.
+    if result <> "rebuild" and result <> "signOut" then
+        m.weather.reload = true
+        refreshWeatherRow()
     end if
     if result = "rebuild" or result = "signOut" then
         NxTuneDrop(m.tuneQueue)
@@ -3195,7 +3247,8 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             return true
         end if
         if act = "panel" then
-            openNowPlaying()
+            ' LOCAL WEATHER has no stream to describe.
+            if not m.weatherOn then openNowPlaying()
             return true
         end if
         if key = "OK" or key = "play" then
@@ -3452,4 +3505,138 @@ end function
 sub closePrompt()
     m.promptOpen = false
     m.top.FindNode("prompt").visible = false
+end sub
+
+' ── LOCAL WEATHER (CH 299) ──────────────────────────────────────────────────
+
+' The channels the library gave, and LOCAL WEATHER after them while its switch in Settings is on. Not with
+' no channel at all: the guide then says NO CHANNELS FOUND, as it did.
+function withWeather(list as Dynamic) as Object
+    out = []
+    for each ch in NxList(list)
+        out.Push(ch)
+    end for
+    if out.Count() = 0 or not NxWxChannelOn() then return out
+    ' Where its number puts it: before the FRANCHISES block, not at the end.
+    return NxWxInsertAt(out, NxWxInsertIndex(out), weatherChannel())
+end function
+
+function weatherChannel() as Object
+    c = NxWxChannel()
+    return { id: c.id, number: c.number, name: c.name, color: c.color, blocks: NxWxGuideBlocks(m.weatherPlace, m.weatherSummary, m.weatherTemp), watershed: false, held: false, weather: true }
+end function
+
+' The place's name or the line for the info panel changed: the guide's row says them.
+sub onWeatherInfo()
+    m.weatherPlace = NxWxUpper(m.weather.placeLabel)
+    m.weatherSummary = m.weather.summary
+    m.weatherTemp = m.weather.tempLabel
+    if m.channels = invalid or m.channels.Count() = 0 then return
+    wi = NxWxChannelIndex(m.channels)
+    if wi < 0 then return
+    m.channels[wi] = weatherChannel()
+    ' What airs is the same programme: only its words changed.
+    if m.weatherOn and m.tuned = wi then m.playing = blockAt(m.channels[wi], nowSec())
+    m.gridStale = true
+    renderGrid()
+    renderInfo()
+end sub
+
+sub startWeather(idx as Integer)
+    m.tuned = idx
+    print "player: tuned channel "; m.channels[idx].id; ", LOCAL WEATHER"
+    m.sawPlaying = false
+    m.unplayedEnds = 0
+    m.nextAiring = invalid
+    m.pendingAttempt = invalid
+    m.attempt = invalid
+    m.top.FindNode("notice").text = ""
+    ' No stream: the player, the watchdogs and the tracker rest. Only one thing plays on the stick: the weather's
+    ' own music, which waits for the video to stop.
+    stopTracker()
+    stopKeepAlive()
+    stopRetry()
+    m.deadlineTimer.control = "stop"
+    m.starveTimer.control = "stop"
+    m.video.control = "stop"
+    hideCard()
+    hideHaze()
+    m.playing = blockAt(m.channels[idx], nowSec())
+    m.weatherOn = true
+    m.weather.visible = true
+    m.weather.active = true
+    startWeatherMusic()
+    renderInfo()
+    renderGrid()
+end sub
+
+' The channel went to another, or the guide is going: the picture and the music stop.
+sub stopWeather()
+    if not m.weatherOn then return
+    m.weatherOn = false
+    m.weather.active = false
+    m.weather.visible = false
+    stopKeepAlive()
+    m.keepVideo.mute = true
+end sub
+
+' The weather channel's music, on the hold clip's own Video node: the TV only keeps its screensaver off while
+' a video is playing, and the channel has none, so the music (one original loop) plays through a Video node,
+' audible, 4 px in the corner. The hold clip's own watch (onKeepState) starts it again when it ends and gives up
+' after three failures, as for the clip. Another channel starting stops it (stopKeepAlive in startTune).
+sub startWeatherMusic()
+    m.keepGaveUp = false
+    m.keepErrors = 0
+    content = CreateObject("roSGNode", "ContentNode")
+    content.url = "pkg:/weather/local-forecast.mp3"
+    content.streamFormat = "mp3"
+    m.keepVideo.content = content
+    m.keepVideo.mute = false
+    m.keepVideo.control = "play"
+    m.keepAlive = true
+    print "weather: music on the keep-awake player, so the screensaver stays off"
+end sub
+
+' An hour's block over: the next one is what airs, with no stream to wait for.
+sub tickWeather(t as LongInteger)
+    if m.tuned < 0 or m.tuned >= m.channels.Count() then return
+    ch = m.channels[m.tuned]
+    if ch.weather <> true then return
+    if m.playing = invalid or t >= m.playing.endSec then
+        m.playing = blockAt(ch, t)
+    end if
+end sub
+
+' Settings turned LOCAL WEATHER on or off: the guide's last row comes or goes at once.
+sub refreshWeatherRow()
+    if m.channels = invalid then return
+    n = m.channels.Count()
+    wi = NxWxChannelIndex(m.channels)
+    real = n
+    if wi >= 0 then real = n - 1
+    want = real > 0 and NxWxChannelOn()
+    if want = (wi >= 0) then return
+    m.stripeStale = true
+    if want then
+        at = NxWxInsertIndex(m.channels)
+        m.channels = NxWxInsertAt(m.channels, at, weatherChannel())
+        ' The rows after it moved down one: the tuned channel and the focus stay on what they were on.
+        if m.tuned >= at then m.tuned = m.tuned + 1
+        if m.focus >= at then m.focus = m.focus + 1
+    else
+        wasTuned = m.tuned = wi
+        m.channels.Delete(wi)
+        if m.tuned > wi then m.tuned = m.tuned - 1
+        if m.focus > wi then m.focus = m.focus - 1
+        if m.focus >= m.channels.Count() then m.focus = m.channels.Count() - 1
+        if m.focus < 0 then m.focus = 0
+        if wasTuned then
+            m.tuned = 0
+            stopWeather()
+            pressTune(0)
+        end if
+    end if
+    keepFocusVisible()
+    renderGrid()
+    renderInfo()
 end sub

@@ -54,9 +54,9 @@ class MediaBrowserScanTest {
     @Test
     fun theScanMakesTheWebTunersItems() {
         val requests = ArrayList<String>()
-        // As the app scans a Jellyfin server (AppModel.scan): the plain list and the includeHidden list are both asked (N-016), nothing is switched
-        // off, and a library hidden on Jellyfin is not read until the viewer switches it on (hiddenRead empty). The web vectors are made the same way.
         val got = MediaBrowserLibrary({ p -> requests += p; serve(p) }, vectors["userId"]!!.jsonPrimitive.content, "jellyfin")
+            // As the app scans a Jellyfin server (AppModel passes includeHidden for Jellyfin): the plain list and the includeHidden list are
+            // both asked, which is what the web tuner's scan asks (N-016), and nothing is switched on among the hidden libraries.
             .scan(includeHidden = true, hiddenRead = emptySet())
         val want = vectors["items"]!!.jsonArray.map { it.jsonObject }
         assertEquals("item count", want.size, got.size)

@@ -101,7 +101,7 @@ async function load(library, query = "") {
   await page.waitForTimeout(1500);
   const state = await page.evaluate(() => ({
     app: appState,
-    withContent: CHANNELS.filter((c) => c.enabled).length,
+    withContent: CHANNELS.filter((c) => c.enabled && !c.weather).length,   // LOCAL WEATHER (CH 299) is always on and has no library behind it
     bundlesOn: [...enabledBundleIDs],
     saved: localStorage.getItem("nostalgex_enabled_bundles"),
   }));

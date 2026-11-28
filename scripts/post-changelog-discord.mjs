@@ -29,7 +29,12 @@ if (!entry) { console.error(`No changelog entry${wanted ? ` for ${wanted}` : ''}
 /** Discord embed. Keeps the bullets as a list and the version as the title. */
 const embed = {
   title: `Nostalgex ${entry.version} — ${entry.title}`,
-  description: entry.bullets.map(b => `• ${b}`).join('\n\n'),
+  description: [
+    entry.bullets.map(b => `• ${b}`).join('\n\n'),
+    ...[['New channels', entry.newChannels], ['Fixes', entry.fixes]]
+      .filter(([, items]) => Array.isArray(items) && items.length > 0)
+      .map(([label, items]) => `**${label}**\n` + items.map(b => `• ${b}`).join('\n\n')),
+  ].join('\n\n'),
   color: 0x06ed8d,
   footer: { text: entry.date },
   url: 'https://nostalgex.app',

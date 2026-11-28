@@ -11,7 +11,7 @@ This policy covers four separate things: the Nostalgex app on Apple TV, the Nost
 - No accounts. Nothing is sold or rented to anyone.
 - Your server address and login token stay on your Apple TV, Roku or Android TV, or in your browser if you use the web tuner or the Docker tuner.
 - The Apple TV app sends a small, fixed list of anonymous usage events so we can tell whether things are working. No names, no library contents, no titles. The Roku and Android TV apps send none.
-- The website uses two lightweight analytics scripts to count page visits.
+- The website uses one lightweight analytics script to count page visits.
 - Nothing we collect follows you into other companies' apps or across the web.
 
 ## The app: what it sends
@@ -70,6 +70,14 @@ For channels Nostalgex builds from your own collections, `channelType` is `colle
 
 - A setting changed. One generic event covers channel package toggles, server toggles, rescan taps, disconnect taps, retro mode, stream quality, subtitle language, audio language, subtitle-in-fullscreen toggle, auto foreign-audio subtitles, Plex playback reporting toggle, and sleep timer minutes. The event carries a short setting key (for example `retro_mode`, `bundle:essentials`, `subtitle_language`) and a short value (`true`/`false`, a language code, or a numeric bucket). No library or server identity is included; server toggles do not include the server's identifier
 - The user tapped RATE NOSTALGEX (opens the App Store)
+
+**Tip jar**
+
+From version 1.0.34 the app sends three events about tips. Each carries the tier and nothing else: one of `popcorn`, `tv_dinner` or `pizza_night`. No number of tips, price, total, currency or transaction ID, and no title or channel.
+
+- `tip.started`: you confirmed a tip and the App Store sheet was asked for
+- `tip.completed`: the tip went through and the thank-you card was shown. Sent once per tip, including a tip a parent approves later with Ask to Buy
+- `tip.failed`: a tip you started was refused by the store or failed verification. Cancelling, or waiting for approval, sends nothing
 
 **Update emails**
 

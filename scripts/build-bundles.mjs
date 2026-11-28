@@ -595,6 +595,32 @@ function hubImageRef() {
   return hubImage;
 }
 
+// CH 299 LOCAL WEATHER is not in channels.json (the apps draw it themselves, outside the bundles),
+// so the generated guide cannot list it. The hub carries it as one hand-written row after the
+// bundles. The sentence is the approved store wording, except "5 day" for "5-day": the channel
+// pages' copy check bans hyphens. Marketing owns any change to it.
+const WEATHER_ROW = {
+  name: "LOCAL WEATHER",
+  number: "299",
+  color: "#00D4FF",
+  blurb:
+    "LOCAL WEATHER, channel 299: current conditions, today, the 5 day forecast and radar on a loop, with music. " +
+    "Set a city or postcode in Settings. Radar covers the United States, Canada and Germany.",
+};
+
+function renderWeatherRow() {
+  return `        <section class="guide-row" style="--guide-accent: ${escapeAttr(WEATHER_ROW.color)};" aria-labelledby="row-weather">
+          <div class="guide-row-head">
+            <h2 class="guide-row-name" id="row-weather">${escapeHtml(WEATHER_ROW.name)}</h2>
+            <p class="guide-row-count">Channel ${escapeHtml(WEATHER_ROW.number)}</p>
+            <p class="guide-row-blurb">${escapeHtml(WEATHER_ROW.blurb)}</p>
+          </div>
+          <ul class="guide-row-strip" tabindex="0" aria-label="${escapeAttr(WEATHER_ROW.name)}">
+            <li class="guide-cell"><span class="guide-cell-num">Ch ${escapeHtml(WEATHER_ROW.number)}</span> <span class="guide-cell-name">${escapeHtml(WEATHER_ROW.name)}</span></li>
+          </ul>
+        </section>`;
+}
+
 function renderHubPage(model, assetHrefs) {
   const { bundles, totalChannels, bundleCount, content } = model;
   const { title, description } = hubMeta(model);
@@ -699,6 +725,7 @@ ${renderBreadcrumb(crumbs)}
 
       <div class="channels-guide">
 ${rows}
+${renderWeatherRow()}
       </div>
 
       <section class="channels-cta" aria-labelledby="channels-cta-heading">

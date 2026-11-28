@@ -301,6 +301,17 @@ sub buildRows()
         end if
     end if
 
+    ' LOCAL WEATHER (CH 299, I-016): one link row on the list and its page, like MY COLLECTIONS: the
+    ' place, the units and the switch, then the data's credits (CC BY 4.0).
+    m.addPage = "weather"
+    add({ kind: "header", title: "LOCAL WEATHER", subtitle: "Conditions, forecast and radar for your town, channel 299" }, "channels")
+    add({ kind: "weatherPlace" })
+    add({ kind: "weatherUnits" })
+    add({ kind: "weatherChannel" })
+    add({ kind: "info", text: "Weather data from MET Norway (api.met.no), CC BY 4.0, rearranged for display." }, "channels")
+    add({ kind: "info", text: "Place names from GeoNames (geonames.org), CC BY 4.0." }, "channels")
+    add({ kind: "info", text: "Radar from NOAA (US), Environment Canada and the German Weather Service." }, "channels")
+
     m.addPage = ""
     ' WATERSHED (#190) ends the CHANNELS & BUNDLES list, after the three links,
     ' as on the Apple TV.
@@ -374,7 +385,7 @@ sub pushMissing()
     clock = CreateObject("roTimespan")
     parsedMs = -1
     if m.defs = invalid then
-        m.defs = NxChannelDefsById(ParseJson(ReadAsciiFile("pkg:/data/channels.json")))
+        m.defs = NxChannelDefsById(NxChannelsConfig(NxCacheRoot(), "pkg:/data/channels.json").config)
         parsedMs = clock.TotalMilliseconds()
     end if
     groups = NxMissingGroups(m.top.bundles, m.enabled, m.top.builtBundles, m.building, m.onAir, m.defs)
@@ -429,7 +440,7 @@ end sub
 sub pushPackage(i as Integer)
     b = m.top.bundles[i]
     ' The channel names the focused row lists (#277).
-    if m.defs = invalid then m.defs = NxChannelDefsById(ParseJson(ReadAsciiFile("pkg:/data/channels.json")))
+    if m.defs = invalid then m.defs = NxChannelDefsById(NxChannelsConfig(NxCacheRoot(), "pkg:/data/channels.json").config)
     row = { kind: "bundle", index: i, built: NxHasValue(m.top.builtBundles, b.id), avail: NxBundleAvailability(b.channelIDs, m.onAir) }
     add(row)
 end sub
@@ -612,7 +623,11 @@ end function
 ' The counts behind the link rows' values (NxChannelsLinkValue), from this
 ' visit's switches, as the Apple TV's list reads its live state.
 function linkCounts() as Object
-    n = { packagesOn: 0, franchisesOn: false, franchiseRowsOn: 0, franchiseCollectionsOn: 0, collectionsOn: 0 }
+    n = { packagesOn: 0, franchisesOn: false, franchiseRowsOn: 0, franchiseCollectionsOn: 0, collectionsOn: 0, weather: "" }
+    place = NxWxReadPlace()
+    title = ""
+    if place <> invalid then title = NxWxPlaceTitle(place)
+    n.weather = NxWeatherLinkValue(title, NxWxChannelOn())
     for each b in m.top.bundles
         if NxHasValue(m.enabled, b.id) then
             if b.id = NxFranchisesBundleID() then n.franchisesOn = true else n.packagesOn = n.packagesOn + 1
@@ -1052,6 +1067,32 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
             state = "ON"
             stateColor = m.accent + "FF"
         end if
+    else if row.kind = "weatherPlace" then
+        label = "LOCATION"
+        place = NxWxReadPlace()
+        state = "SET"
+        if place <> invalid then
+            detail = NxWxPlaceLabel(place)
+            state = "CHANGE"
+        else
+            detail = "Type a city or a postcode"
+        end if
+        stateColor = m.accent + "FF"
+    else if row.kind = "weatherUnits" then
+        label = "WEATHER UNITS"
+        detail = "AUTO uses Fahrenheit in the United States and Celsius everywhere else"
+        state = NxWxUnitsLabel(NxWxReadUnits())
+        stateColor = m.t2
+        if state <> "AUTO" then stateColor = m.accent + "FF"
+    else if row.kind = "weatherChannel" then
+        label = "SHOW LOCAL WEATHER"
+        detail = "Channel 299, at the end of the guide"
+        state = "OFF"
+        stateColor = m.t2
+        if NxWxChannelOn() then
+            state = "ON"
+            stateColor = m.accent + "FF"
+        end if
     else if row.kind = "retro" then
         label = "RETRO MODE"
         detail = "CRT scanlines, vignette, flicker, 4:3 aspect ratio"
@@ -1449,6 +1490,16 @@ sub pressRow()
         NxSaveReportPrefs(m.report)
         print "settings: mark watched "; m.report.markWatched
         render()
+    else if row.kind = "weatherPlace" then
+        openPlaceKeyboard()
+    else if row.kind = "weatherUnits" then
+        NxWxSaveUnits(NxWxNextUnits(NxWxReadUnits()))
+        print "settings: weather units "; NxWxReadUnits()
+        render()
+    else if row.kind = "weatherChannel" then
+        NxWxSaveChannelOn(not NxWxChannelOn())
+        print "settings: local weather channel "; NxWxChannelOn()
+        render()
     else if row.kind = "retro" then
         NxSaveRetroMode(not NxRetroMode())
         render()
@@ -1563,5 +1614,133 @@ sub leave()
         m.top.result = "close"
     else
         m.top.result = "close"
+    end if
+end sub
+
+' ── LOCAL WEATHER's place ───────────────────────────────────────────────────
+' OK on LOCATION: the TV's keyboard for a city or a postcode, a search of the place files on nostalgex.app,
+' then the matches as buttons. The place is kept on this TV; nothing leaves it until the forecast call.
+
+sub openPlaceKeyboard()
+    kb = CreateObject("roSGNode", "StandardKeyboardDialog")
+    kb.title = "LOCATION"
+    kb.message = ["A city or a postcode, such as Toronto, 90210, M5V or SW1A. The matches come next."]
+    kb.text = ""
+    buttons = ["SEARCH"]
+    if NxWxReadPlace() <> invalid then buttons.Push("REMOVE LOCATION")
+    buttons.Push("CANCEL")
+    kb.buttons = buttons
+    m.wxButtons = buttons
+    showWxDialog(kb, "onPlaceKeyboardButton")
+end sub
+
+sub showWxDialog(dlg as Object, handler as String)
+    dlg.ObserveField("buttonSelected", handler)
+    dlg.ObserveField("wasClosed", "onWxDialogClosed")
+    m.wxDialog = dlg
+    m.top.GetScene().dialog = dlg
+end sub
+
+' Closes the dialog on show without the closing notice acting as an answer.
+sub closeWxDialog()
+    dlg = m.wxDialog
+    if dlg = invalid then return
+    dlg.UnobserveField("buttonSelected")
+    dlg.UnobserveField("wasClosed")
+    dlg.close = true
+    m.wxDialog = invalid
+    m.top.SetFocus(true)
+end sub
+
+' Back on a dialog: nothing chosen.
+sub onWxDialogClosed()
+    m.wxDialog = invalid
+    m.top.SetFocus(true)
+end sub
+
+sub onPlaceKeyboardButton()
+    kb = m.wxDialog
+    if kb = invalid then return
+    pick = kb.buttonSelected
+    text = kb.text
+    closeWxDialog()
+    answer = ""
+    if pick >= 0 and pick < m.wxButtons.Count() then answer = m.wxButtons[pick]
+    if answer = "REMOVE LOCATION" then
+        NxWxSavePlace(invalid)
+        NxWxDeleteForecast()
+        print "settings: weather location removed"
+        render()
+    else if answer = "SEARCH" and Len(text.Trim()) > 0 then
+        startPlaceSearch(text.Trim())
+    end if
+end sub
+
+sub startPlaceSearch(query as String)
+    busy = CreateObject("roSGNode", "StandardProgressDialog")
+    busy.title = "SEARCHING"
+    busy.message = "Looking for " + query
+    m.wxQuery = query
+    m.wxDialog = busy
+    busy.ObserveField("wasClosed", "onWxDialogClosed")
+    m.top.GetScene().dialog = busy
+    m.wxTask = CreateObject("roSGNode", "WeatherTask")
+    m.wxTask.op = "search"
+    m.wxTask.args = { query: query }
+    m.wxTask.ObserveField("result", "onPlaceSearch")
+    m.wxTask.control = "run"
+end sub
+
+sub onPlaceSearch(ev as Object)
+    res = ev.GetData()
+    m.wxTask = invalid
+    if m.wxDialog = invalid then return
+    closeWxDialog()
+    if res = invalid or res.ok <> true then
+        showPlaceResults([], "THE PLACE LIST DID NOT ANSWER")
+    else
+        showPlaceResults(res.places, res.hint)
+    end if
+end sub
+
+sub showPlaceResults(places as Object, hint as String)
+    dlg = CreateObject("roSGNode", "StandardMessageDialog")
+    buttons = []
+    for each p in places
+        buttons.Push(p.label)
+    end for
+    if places.Count() > 0 then
+        dlg.title = "PICK YOUR PLACE"
+        dlg.message = ["Matches for " + m.wxQuery]
+    else
+        dlg.title = "NOTHING FOUND"
+        text = "Try the city's name, or a postcode."
+        if hint <> "" then text = hint + ". " + text
+        dlg.message = [text]
+    end if
+    buttons.Push("SEARCH AGAIN")
+    buttons.Push("CANCEL")
+    dlg.buttons = buttons
+    m.wxPlaces = places
+    m.wxButtons = buttons
+    showWxDialog(dlg, "onPlacePicked")
+end sub
+
+sub onPlacePicked()
+    dlg = m.wxDialog
+    if dlg = invalid then return
+    pick = dlg.buttonSelected
+    closeWxDialog()
+    if pick < 0 or pick >= m.wxButtons.Count() then return
+    if pick < m.wxPlaces.Count() then
+        place = NxWxNormalizePlace(m.wxPlaces[pick])
+        if place <> invalid then
+            NxWxSavePlace(place)
+            NxWxDeleteForecast()
+            print "settings: weather location set to "; place.name; ", "; place.cc
+        end if
+        render()
+    else if m.wxButtons[pick] = "SEARCH AGAIN" then
+        openPlaceKeyboard()
     end if
 end sub

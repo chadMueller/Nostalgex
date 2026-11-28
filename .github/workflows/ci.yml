@@ -270,8 +270,14 @@ jobs:
       #                        the same vectors FranchiseGoldenTests checks on tvOS
       #   channels:doc:check - CHANNELS.md is regenerated from channels.json
       #                        (it had drifted 8 config versions)
+      #   channels:json:check - the pre-deploy gate on channels.json, which every app fetches: it parses, the
+      #                        fields and ids and numbers are right, every rule key is one all four loaders know,
+      #                        the version is not lower than the deployed copy, formatVersion is 1 or less.
+      #                        Here the deployed copy has to be readable, or the check fails.
       - name: Run channel engine checks
         run: npm test
+        env:
+          NX_CHANNELS_REQUIRE_PREVIOUS: "1"
 
   web-build:
     name: Web (Vite build)

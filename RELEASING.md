@@ -59,6 +59,7 @@ uploaded is still free to reuse, but confirm that in TestFlight rather than assu
 ## Web release
 
 1. Add the release to `content/changelog.json` (newest entry first).
+   channels.json is fetched by every app, so `npm test` gates it (`npm run channels:json:check`): ids and numbers unique, every rule key known to the Swift, JS, Roku and Android loaders, `version` not lower than the deployed copy, `formatVersion` 1 or less.
 2. Regenerate the auto-built regions. Neither region is safe to hand-edit:
    ```
    npm run changelog:render         # CHANGELOG:START/END in index.html

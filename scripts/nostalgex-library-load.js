@@ -304,6 +304,16 @@
     return total > 0 && done >= 0 && done <= total ? `${label}: ${formatCount(done)} OF ${formatCount(total)}` : label;
   }
   const updatingLine = (read) => (Number(read) > 0 ? `UPDATING LIBRARY: ${formatCount(read)} ${titlesWord(Number(read))} READ` : 'UPDATING LIBRARY');
+  /**
+   * The second line of a switch or rescan block, by phase: the library being read while it is read, then BUILDING CHANNELS (with how far),
+   * then BUILDING SCHEDULE. The library's name stays in the state after the scan, so the phase has to decide, or the block would keep
+   * saying MOVIES: 450 OF 450 through the whole build.
+   */
+  function progressLine() {
+    if (state.phase === 'buildingChannels') return state.channelBuildTotal > 0 ? `BUILDING CHANNELS: ${state.channelBuildIndex} OF ${state.channelBuildTotal}` : 'BUILDING CHANNELS';
+    if (state.phase === 'finishing') return 'BUILDING SCHEDULE';
+    return state.scanLibrary ? libraryLine(state.scanLibrary, state.scanLibraryDone, state.scanLibraryTotal) : '';
+  }
   const readyLine = (n) => `GUIDE READY: ${formatCount(n)} ${titlesWord(Number(n))}`;
   // The short forms for a narrow top bar (a TV browser's 960 px, a phone): the same facts in fewer letters, tried in turn.
   const updatingShort = (read) => (Number(read) > 0 ? `UPDATING: ${formatCount(read)}` : 'UPDATING');
@@ -328,7 +338,7 @@
     const mode = loadingMode();
     const afterSwitch = session.cause === 'switch';
     const read = readLine(state.scanItemsFound);
-    const lib = state.scanLibrary ? libraryLine(state.scanLibrary, state.scanLibraryDone, state.scanLibraryTotal) : '';
+    const lib = progressLine();
 
     // The guide's empty area (the guide hides its rows while it says so).
     const grid = byId('guide-grid');
@@ -339,7 +349,7 @@
       if (mode === 'guide') {
         setText(byId('guide-loading-title'), loadTitle(afterSwitch));
         setText(byId('guide-loading-read'), state.scanItemsFound > 0 ? read : '');
-        setText(byId('guide-loading-lib'), lib || (state.phase === 'buildingChannels' && state.channelBuildTotal > 0 ? `BUILDING CHANNELS: ${state.channelBuildIndex} OF ${state.channelBuildTotal}` : ''));
+        setText(byId('guide-loading-lib'), lib);
       }
     }
 

@@ -569,6 +569,7 @@ sub showPoster(ref as Dynamic)
 end sub
 
 sub onPosterFile()
+    if m.posterTask = invalid then return
     file = m.posterTask.file
     if file = "" then return
     p = m.top.FindNode("poster")

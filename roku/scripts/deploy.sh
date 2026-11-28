@@ -63,7 +63,7 @@ if [ "${NOSTALGEX_ENRICHMENT:-off}" = on ]; then
     echo "build: enrichment on"
 fi
 if [ "$mode" = test ]; then
-    cp tests/main.brs tests/runtime-device.brs tests/ScheduleTests.brs tests/FilterTests.brs tests/FilterGoldenTests.brs tests/RatingGoldenTests.brs tests/WatershedGoldenTests.brs tests/MusicTitleGoldenTests.brs tests/AudioPickGoldenTests.brs tests/GuideTimeoutTests.brs tests/GuideTimeCursorTests.brs tests/GuideStripesTests.brs tests/LineupTests.brs tests/ScheduleDSTGoldenTests.brs tests/ScheduleParityGoldenTests.brs tests/FranchiseTests.brs tests/FranchiseGuideTests.brs tests/EnrichmentTests.brs tests/SubtitleTests.brs tests/SrtTests.brs tests/GuideNavTests.brs tests/ColdBootSeedTests.brs tests/TuneQueueTests.brs tests/AdvanceTests.brs tests/FallbackTests.brs tests/SleepTimerTests.brs tests/DeepLinkTests.brs tests/CollectionTests.brs tests/FranchiseLineupTests.brs tests/ServerChoiceTests.brs tests/ServerResolveTests.brs tests/SnapshotTests.brs tests/StallTests.brs tests/SeasonalTests.brs tests/MediaBrowserTests.brs tests/SignInFlowTests.brs tests/QrTests.brs tests/VersionTests.brs tests/PlexAudioTests.brs tests/PosterTests.brs tests/RescanTests.brs tests/CoverageTests.brs tests/LaunchGuardTests.brs tests/LastChannelTests.brs tests/HiddenLibrariesTests.brs tests/LibraryPickerGoldenTests.brs tests/LibrarySectionsTests.brs tests/LoadStateTests.brs tests/DolbyVisionTests.brs tests/DailyRefreshTests.brs tests/SmallLibraryTests.brs tests/MultiServerFilterTests.brs tests/FilterCaseTests.brs tests/ReportTests.brs tests/PlaybackInfoTests.brs tests/StreamQualityTests.brs tests/Utf8RepairTests.brs tests/CrossChannelTests.brs tests/SettingsChannelsTests.brs tests/SettingsRailTests.brs tests/ChannelsMissingTests.brs tests/DesignTokensTests.brs tests/GuideLookTests.brs "$stage"/source/
+    cp tests/main.brs tests/runtime-device.brs tests/ScheduleTests.brs tests/FilterTests.brs tests/FilterGoldenTests.brs tests/RatingGoldenTests.brs tests/WatershedGoldenTests.brs tests/MusicTitleGoldenTests.brs tests/AudioPickGoldenTests.brs tests/GuideTimeoutTests.brs tests/GuideTimeCursorTests.brs tests/GuideStripesTests.brs tests/LineupTests.brs tests/ScheduleDSTGoldenTests.brs tests/ScheduleParityGoldenTests.brs tests/FranchiseTests.brs tests/FranchiseGuideTests.brs tests/EnrichmentTests.brs tests/SubtitleTests.brs tests/SrtTests.brs tests/GuideNavTests.brs tests/ColdBootSeedTests.brs tests/TuneQueueTests.brs tests/AdvanceTests.brs tests/FallbackTests.brs tests/SleepTimerTests.brs tests/DeepLinkTests.brs tests/CollectionTests.brs tests/FranchiseLineupTests.brs tests/ServerChoiceTests.brs tests/ServerResolveTests.brs tests/SnapshotTests.brs tests/StallTests.brs tests/SeasonalTests.brs tests/MediaBrowserTests.brs tests/SignInFlowTests.brs tests/QrTests.brs tests/VersionTests.brs tests/PlexAudioTests.brs tests/PosterTests.brs tests/RescanTests.brs tests/CoverageTests.brs tests/LaunchGuardTests.brs tests/LastChannelTests.brs tests/LiveChannelsTests.brs tests/HiddenLibrariesTests.brs tests/LibraryPickerGoldenTests.brs tests/WeatherTests.brs tests/LibrarySectionsTests.brs tests/LoadStateTests.brs tests/DolbyVisionTests.brs tests/DailyRefreshTests.brs tests/SmallLibraryTests.brs tests/MultiServerFilterTests.brs tests/FilterCaseTests.brs tests/ReportTests.brs tests/PlaybackInfoTests.brs tests/StreamQualityTests.brs tests/Utf8RepairTests.brs tests/CrossChannelTests.brs tests/SettingsChannelsTests.brs tests/SettingsRailTests.brs tests/ChannelsMissingTests.brs tests/DesignTokensTests.brs tests/GuideLookTests.brs "$stage"/source/
     # The vectors are generated from this tree's JS engine, never committed
     # (qr.json, from tests/gen-qr.mjs, is the one kept in git).
     NOSTALGEX_DIR=.. node tests/gen-vectors.mjs >/dev/null
@@ -85,6 +85,14 @@ if [ "${NX_TEST_DATA:-0}" = 1 ]; then
 else
     build=$(scripts/stamp-manifest.sh "$stage")
     echo "build: $build"
+fi
+# NX_WEATHER_BASE=http://<this Mac>:<port> points the weather channel's forecast, place search and
+# place files at a stand-in server, for a sideload only (the app reads it only when IsDev is true;
+# release.sh refuses it). After the stamp, so the build hash is the release's.
+if [ -n "${NX_WEATHER_BASE:-}" ]; then
+    [[ $NX_WEATHER_BASE =~ ^https?://[A-Za-z0-9.:-]+$ ]] || { echo "NX_WEATHER_BASE must be http(s)://host[:port]" >&2; exit 1; }
+    printf 'nx_weather_base=%s\n' "$NX_WEATHER_BASE" >>"$stage/manifest"
+    echo "weather: forecast and places from $NX_WEATHER_BASE (a sideload only)"
 fi
 (cd "$stage" && zip -qr ../nostalgex-roku.zip .)
 

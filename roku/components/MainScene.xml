@@ -18,6 +18,7 @@
   <script type="text/brightscript" uri="pkg:/source/util/LibrarySections.brs" />
   <script type="text/brightscript" uri="pkg:/source/mediabrowser/HiddenLibraries.brs" />
   <script type="text/brightscript" uri="pkg:/source/util/DailyRefresh.brs" />
+  <script type="text/brightscript" uri="pkg:/source/util/LiveChannels.brs" />
   <script type="text/brightscript" uri="pkg:/source/util/LaunchGuard.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/DeepLink.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/LastChannel.brs" />

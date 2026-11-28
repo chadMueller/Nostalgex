@@ -136,6 +136,7 @@ export default defineConfig(({ mode }) => {
           jellyfin: resolve(__dirname, 'jellyfin.html'),
           emby: resolve(__dirname, 'emby.html'),
           roku: resolve(__dirname, 'roku.html'),
+          android: resolve(__dirname, 'android.html'),
           '404': resolve(__dirname, '404.html'),
         },
       },
