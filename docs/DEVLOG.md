@@ -3,6 +3,22 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-28 (Privacy: the hosted web tuner's sign-in screen loads the analytics script)
+
+**Changed.** `privacy.html` and `Nostalgex/PRIVACY_POLICY.md` said the web tuner does not load the statsngraphs script. It does: `web-tuner.html`
+(the sign-in screen) loads it after the load event. Chad kept the script and had the pages updated (2026-11-28). Both now say so, list what it sends,
+and say the player page (`plex-tuner.html`), a returning visitor with a saved sign-in, and the Docker tuner do not load it. Effective date is now
+November 28, 2026.
+- Read from the script (v13): the page path, host and referrer, `utm_*` tags, a 10 second engage ping, outbound link and download clicks (address and
+  text), dashboard click rules (today only button labels, none read a field value), the `signup_success` event, a random visitor and session ID in
+  localStorage (no cookies). It skips on DNT, GPC and localhost. It reads `location.pathname`, not the query, hash or `document.title`.
+- Measured in headless Chromium with the analytics host faked: a fresh visitor sends one `/collect` and one click event with the label JELLYFIN. A fake
+  server address, user name and password typed in sent nothing. A fake saved sign-in went straight to `plex-tuner.html` with no analytics request.
+- Docker: `scripts/selfhost-build.mjs` strips the loader (strip markers) and throws if `statsngraphs` is left in a built page.
+
+**Not changed.** The tuner files and the Docker build. "Website analytics are kept as visit counts" (retention line) was left as it was; the script
+sends a random visitor ID, and what the analytics host stores is not visible from here.
+
 
 ## 2026-11-20 (publish 80s sitcoms channel)
 
