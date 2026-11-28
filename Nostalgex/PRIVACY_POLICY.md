@@ -1,6 +1,6 @@
 # Privacy Policy
 
-Effective: November 15, 2026
+Effective: November 28, 2026
 
 Nostalgex turns your own Plex, Jellyfin, or Emby library into live TV channels. We do not host, supply, or stream any media. Everything you watch comes off your own server.
 
@@ -11,7 +11,7 @@ This policy covers four separate things: the Nostalgex app on Apple TV, the Nost
 - No accounts. Nothing is sold or rented to anyone.
 - Your server address and login token stay on your Apple TV, Roku or Android TV, or in your browser if you use the web tuner or the Docker tuner.
 - The Apple TV app sends a small, fixed list of anonymous usage events so we can tell whether things are working. No names, no library contents, no titles. The Roku and Android TV apps send none.
-- The website uses two lightweight analytics scripts to count page visits.
+- The website, and the sign-in screen of the hosted web tuner, use one lightweight analytics script to count page visits. The Docker tuner has none, and neither does the tuner once you are watching.
 - Nothing we collect follows you into other companies' apps or across the web.
 
 ## The app: what it sends
@@ -71,6 +71,14 @@ For channels Nostalgex builds from your own collections, `channelType` is `colle
 - A setting changed. One generic event covers channel package toggles, server toggles, rescan taps, disconnect taps, retro mode, stream quality, subtitle language, audio language, subtitle-in-fullscreen toggle, auto foreign-audio subtitles, Plex playback reporting toggle, and sleep timer minutes. The event carries a short setting key (for example `retro_mode`, `bundle:essentials`, `subtitle_language`) and a short value (`true`/`false`, a language code, or a numeric bucket). No library or server identity is included; server toggles do not include the server's identifier
 - The user tapped RATE NOSTALGEX (opens the App Store)
 
+**Tip jar**
+
+From version 1.0.34 the app sends three events about tips. Each carries the tier and nothing else: one of `popcorn`, `tv_dinner` or `pizza_night`. No number of tips, price, total, currency or transaction ID, and no title or channel.
+
+- `tip.started`: you confirmed a tip and the App Store sheet was asked for
+- `tip.completed`: the tip went through and the thank-you card was shown. Sent once per tip, including a tip a parent approves later with Ask to Buy
+- `tip.failed`: a tip you started was refused by the store or failed verification. Cancelling, or waiting for approval, sends nothing
+
 **Update emails**
 
 - The update-emails QR code in Settings was shown, with the backend. Not sent in demo mode
@@ -94,11 +102,13 @@ Alongside each event, the analytics library also records ordinary technical deta
 
 ## The website
 
-The marketing pages on nostalgex.app load one analytics script, statsngraphs: the home page, the Plex, Jellyfin and Emby pages, the connect page, the support page, and the blog. It counts page visits, referrers, and basic device and country information. It does not use advertising cookies and does not build a profile of you across other sites.
+The marketing pages on nostalgex.app load one analytics script, statsngraphs: the home page, the app and server pages, the support and self-host pages, the blog and the channel guide. The hosted web tuner loads the same script on its sign-in screen, the page at nostalgex.app/web-tuner where you pick Plex, Jellyfin or Emby and sign in. It counts page visits, referrers, and basic device and country information. It does not use advertising cookies and does not build a profile of you across other sites.
+
+Here is what the script sends. The page it ran on (for the tuner, /web-tuner), the page you came from, and any campaign tags on the link you followed (like utm_source). A second small message goes after you have been on a page for 10 seconds. It also reports a click on a link that leaves nostalgex.app (the link's address and its text) or a link to a file, and a few named button clicks set up in its dashboard. On the tuner's sign-in screen those are the Plex and Jellyfin buttons, and all it records is the button's label. When you sign up for update emails it reports that the signup worked and which form it came from. It keeps a random visitor ID and a session ID in your browser's local storage, not in cookies, so a return visit counts as the same browser. The country and device type are worked out from the request itself, which, like any request to a website, carries your IP address. It does not read anything you type. Your server address, username, password and token are never sent to it, and your library and what you watch are not on the page it runs on. It does nothing if your browser sends Do Not Track or Global Privacy Control.
 
 If you sign up for update emails, your email address goes to Resend, the service that sends them. Along with it we store which signup form or QR code you used (for example the home page, the connect page, or the Apple TV app's settings screen), the page you signed up on, and any campaign tags that were on the link you followed. Nothing else about your visit is stored with it, and it is never joined to app analytics. Every email has an unsubscribe link.
 
-The web tuner itself does not load it. Once you are connected and watching, no analytics script is running on the page, so nothing about your library or what you play is measured. To sort titles onto channels, the web tuner looks up public movie and TV metadata the same way the app does: through the shared Supabase cache and the relay described below, sending only public TMDB and IMDb ids. No library titles, account, or server details are sent with them. For the music video channels it also looks up genres on MusicBrainz, then Deezer for any it can't place, and years on MusicBrainz, the same as the app: for each music video your browser searches by song title and artist name. Nothing about you, your account or your server goes with it, though like any website they can see your IP address. The answers are kept in your browser, so it doesn't ask again every time you open it. The privacy policy page does not load them either. All of this is separate from the app, and nothing from the app is joined to anything from the website.
+Once you are connected and watching, the tuner page does not load the script, so nothing about your library or what you play is measured. If your browser has a saved sign-in, the tuner skips the sign-in screen and the script is not loaded at all. The Docker tuner never loads the script. To sort titles onto channels, the web tuner looks up public movie and TV metadata the same way the app does: through the shared Supabase cache and the relay described below, sending only public TMDB and IMDb ids. No library titles, account, or server details are sent with them. For the music video channels it also looks up genres on MusicBrainz, then Deezer for any it can't place, and years on MusicBrainz, the same as the app: for each music video your browser searches by song title and artist name. Nothing about you, your account or your server goes with it, though like any website they can see your IP address. The answers are kept in your browser, so it doesn't ask again every time you open it. The privacy policy page does not load them either. All of this is separate from the app, and nothing from the app is joined to anything from the website.
 
 The web tuner and the Docker tuner keep your sign-in in your browser: for Plex, your account token, and your server's name, address and token; for Jellyfin or Emby, your server's name and address, your user name, your user ID there and its access token. The sign-in stays until you press SIGN OUT in Settings or your server stops accepting it, and none of it is sent to us. Your password is never stored. The day schedules the tuner saves hold your library's item numbers and air times and carry your server's address in their names; SIGN OUT does not remove them, clearing this site's data in your browser does.
 
