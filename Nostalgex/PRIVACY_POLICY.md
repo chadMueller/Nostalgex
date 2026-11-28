@@ -11,7 +11,7 @@ This policy covers four separate things: the Nostalgex app on Apple TV, the Nost
 - No accounts. Nothing is sold or rented to anyone.
 - Your server address and login token stay on your Apple TV, Roku or Android TV, or in your browser if you use the web tuner or the Docker tuner.
 - The Apple TV app sends a small, fixed list of anonymous usage events so we can tell whether things are working. No names, no library contents, no titles. The Roku and Android TV apps send none.
-- The website uses two lightweight analytics scripts to count page visits.
+- The website uses one lightweight analytics script to count page visits.
 - Nothing we collect follows you into other companies' apps or across the web.
 
 ## The app: what it sends
