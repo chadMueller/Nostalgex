@@ -3,6 +3,20 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-28 (Android release 14: closing the app on CHOOSE YOUR LIBRARIES no longer skips it, #338)
+
+**State.** Branch `android/release-14`, off `android/release-13` (`36a47bde`, the build in open testing). versionCode 14, versionName 1.0.0. Not on main, no AAB, not uploaded.
+
+**Why.** #338, the Android twin of #337 (Apple TV: `appletv/picker-owed`). The sign-in is saved before CHOOSE YOUR LIBRARIES shows and the screen lives only in memory, so closing the app there and opening it again read every library.
+
+**Changed.** A `libraryPickOwed` flag is saved with the sign-in (`Prefs`). `chooseLibrariesOrScan` sets it, reads the libraries and keeps it while the picker is offered (`LibraryPicker.pickStillOwed`); CONTINUE, a sign-in with nothing to choose, and sign-out clear it. `start()` asks `LibraryPicker.launchStep`: a saved sign-in that still owes the choice resumes that step before the unfinished-loads question and before any scan. The same rules as the Apple TV, including: a relaunch that cannot list any library keeps the choice owed for the next launch. One difference: Android's RETRY on the connection error screen calls `start()` again, so a retry after an unreachable launch asks for the picker again (on the Apple TV it loads the guide with every library and the picker returns on the next launch). A disconnect while the libraries are being read no longer lets the picker open for a signed-out app.
+
+**Measured.** Emulator `nx_tv_1080p`, headless, a Plex stand-in with two libraries (`projects/nostalgex-internal/android/release-14-2026-11-28/`), signed in through LOCAL SERVER (NO PLEX.TV). Release 13's code: app force-stopped on the picker and opened again, the guide loaded and the stand-in saw `/library/sections/1/all` and `/2/all`, no picker. This build: the same steps bring the picker back, one `/library/sections` request and no `/all` request before the choice; after CONTINUE a relaunch goes to the guide. Every request to the stand-in carried no token (I-057).
+
+**Tests.** `engine` `LibraryPickOwedTest` (5), `app` `LibraryPickOwedTest` (7: the saved flag over a relaunch, Jellyfin/Emby, CONTINUE, sign-out, the order of the launch steps), with `LibraryPickerGoldenTest` (11), `PlexLocalTest` (6) and `LocalPlexSignInTest` (12) unchanged and green. No vector moved.
+
+**Unverified.** Not run on a Google TV. The kill and relaunch was run on Plex (local server) only; Jellyfin and Emby share `chooseLibrariesOrScan`. The RETRY difference above is from reading the code, not run. A multi-server Plex relaunch where only one server answers lists one library and clears the flag (the Apple TV's known edge).
+
 ## 2026-11-28 (web 1.0.24, Roku 1.0.14 and Apple TV 1.0.34 land on main together)
 
 **Why.** The Roku port of EPISODE ORDER needs web 1.0.24's `scripts/` beside it, the Apple TV's engine and goldens are the same files, and the new `scripts/schedule-parity-golden.json` turns the `roku`, `tvos-unit-tests` and `android` jobs red unless each side has what it needs. One landing, one tag (`tuner-v1.0.24`).
@@ -482,6 +496,17 @@ What it shows. The gate waits when the projection reaches the stop line and appl
 
 **Next.** None for this post.
 
+## 2026-11-16 (Android release 11: the weather channel as Chad asked, live channels.json conditional, I-057)
+
+**State.** Branch `android/release-11`, off `android/release-10` (`8caa025e`). Not on main, no AAB, not uploaded.
+
+**Changed.**
+1. **CH 299 is one full-width bar** (Chad: "1 full width bar ... no scheduled sections because it's an unlimited loop channel"). One schedule entry spans all of time and is on now, so the guide draws one bar at the row colour at 13%, reading `LOCAL WEATHER  <temp>`; the cursor has nowhere to step; no UP NEXT; the info panel shows a full bar and LIVE. `WeatherLineupTest` holds it.
+2. **Weather screens.** The credits and UPDATED line are one small stack at the bottom left (16 px, lines 22 apart, text2 at 70%); the icons draw 15% smaller in whole-pixel cells (12, 7 and 6 in the 336, 192 and 168 slots), centred in their slots. The numbers are the web's (`web/weather-full-bar`).
+3. **Settings.** The WEATHER section left PLAYBACK & PICTURE: CHANNELS & BUNDLES has one LOCAL WEATHER link row (status `PLACE · ON` or `NOT SET`) that opens LOCATION, UNITS (AUTO, °F, °C) and SHOW LOCAL WEATHER. OK on the no-location card opens that page.
+4. **Live channels.json is conditional**: `If-None-Match` with the kept copy's ETag (the site answers ETag and 304), a 304 downloads and parses nothing, the bundled version is read off the first line instead of a second parse, and the check's time is logged. A new copy never triggers a rebuild; it is taken at the next one the app makes. Measured: the parse is 26 ms cold and 1 ms warm on the JVM, about 350 KB held per config (the old one is dropped on the swap); on the arm64 emulator a 304 check took 264 to 378 ms off the main thread.
+5. **I-057, LOCAL SERVER (NO PLEX.TV)** (the Apple TV's `appletv/i057-local-plex`): a button beside CANCEL on the Plex code screen opens an address page; the address gets :32400 when no port is typed; `/identity`, then `/library/sections` with no token; signed in with an empty token and a saved `plexNoPlexTv` flag that sign-out clears; server refresh never calls plex.tv for it; a 401 or 403 says to add the network to Plex's "List of IP addresses and networks that are allowed without auth"; X-Plex-Token is left out of every header and URL when empty (library, collections, metadata, posters, direct play and transcode URLs, timeline reports, stop). Tests: `PlexLocalTest` (6) and `LocalPlexSignInTest` (12: saved flag and relaunch, sign-out, account sign-in after it, the address check against a local server, 401 and 403, not Plex, 500, nothing answering, no token header or query on any call). Walked on the emulator against a stand-in (`android/emulator-2026-11-15/i057-*.png`, `i057-stub.py`): every stub request logged `TOKEN none`.
+
 ## 2026-11-16 (Apple TV 1.0.34 polish: the loading pattern in Settings)
 
 **State.** Branch `appletv/1.0.34-polish` off `ca4f530f` (1.0.33 build 58, already uploaded; this is not in it). Not pushed.
@@ -576,6 +601,21 @@ What it shows. The gate waits when the projection reaches the stop line and appl
 - The credits and the forecast's age are one small stack at the bottom left of every screen: the radar source's credit on the radar screen, DATA FROM MET NORWAY, UPDATED, at 16 px (the 25 they were, about 60%) in text-2 at 70% opacity, which still reads about 5.6:1 on the background, so the attribution stays legible.
 - Every weather icon is 15% smaller: whole-pixel cells of 12, 7 and 6 where they were 14, 8 and 7, centred in the same slots, so nothing else moves.
 - The weather settings moved from PLAYBACK & PICTURE to CHANNELS & BUNDLES: one LOCAL WEATHER row (its value is the place and ON or OFF, or NOT SET) that opens a page with LOCATION, UNITS and SHOW LOCAL WEATHER. The no-location card points there.
+
+## 2026-11-15 (Android release 10: LOCAL WEATHER at CH 299, and a live channels.json)
+
+**State.** Branch `android/release-10`, off `android/n016-library-rules` (release 9 plus N-016 option A), versionCode 10. Not on main, not uploaded. Chad asked for the weather channel on all platforms ("you can work towards a lot of these things for the releases including the weather channel for all platforms") and live channel updates before release.
+
+**Changed.**
+1. **LOCAL WEATHER, CH 299 (I-016).** A port of the web tuner's `scripts/nostalgex-weather.js` and `nostalgex-weather-screens.js` (branch `web/weather-channel`, the reference). `engine/Weather.kt` holds the rules and is held to `scripts/weather-golden.json` (`WeatherGoldenTest`, 12 tests: models for five cases, symbols, units, formats, compass, the 65 s loop, radar bands, frame times, bounding boxes, providers, postcodes; plus the place finder over the shipped shards). The picture is `weather/WeatherPainter.kt`, a Canvas port of the web's drawing (same coordinates, DM Mono and VT323, the 18 pixel icons), letterboxed into the tuner's 4:3 box or the whole screen. CURRENT, TODAY, 5-DAY and RADAR on the wall-clock loop (15, 15, 15, 20 seconds).
+2. **Data.** The forecast comes from `https://www.nostalgex.app/api/weather` with `X-Nostalgex-Client: android`, only while the channel is on screen (`WeatherController.activate/deactivate`: another channel, the sleep timer or the app leaving the foreground stops it), kept in `filesDir` and asked for again no sooner than 30 minutes. The place is typed in Settings and found in GeoNames shards bundled in the app (`public/weather/places`, copied into the assets at build time), so a search sends nothing. Radar: NOAA for the US, Environment Canada for Canada, DWD for Germany, each frame recoloured to the five bands (`RadarColour`), the Natural Earth basemap under it; anywhere else RADAR NOT AVAILABLE IN YOUR AREA. Music: the bundled original loop (`weather/music/local-forecast.m4a`) on a `MediaPlayer`, only while the channel is up, muted while Settings is open.
+3. **In the guide.** `Lineup.setWeather` adds the channel at its number when its switch is on and there are other channels (it never makes a guide of its own), with hour-long blocks `LOCAL WEATHER: <place>` and the forecast line in the info panel. It is outside the schedule packing (`WeatherLineupTest` shows every other channel's schedule is identical with or without it). A launch opens on it only when it was the last channel watched and OPEN ON LAST CHANNEL is on. Full screen has no Now Playing for it (Down does nothing).
+4. **Settings.** WEATHER under PLAYBACK & PICTURE: LOCATION (a page with a typed box and the matches), UNITS (AUTO, FAHRENHEIT, CELSIUS), SHOW THE WEATHER CHANNEL. Credits (MET Norway, GeoNames, radar sources, Natural Earth, the music) under ABOUT. The place and the choices live in their own preferences file, which the settings backup never includes.
+5. **Live channels.json (N-074).** `engine/LiveChannels.kt`: fetched from `https://www.nostalgex.app/channels.json` at launch and about every 24 hours behind everything else (8 second limit, never on the startup path), taken only if it loads with the same loader, names a version no older than the bundled copy, has channels with no id twice, and its optional `formatVersion` is one this build reads (absent means 1; the file has none today, so "a format this build understands" is a guard the site can raise later). Kept in `filesDir/channels-live.json`; read at launch before the bundled copy (and ignored once the bundled one is newer); applied at the next guide rebuild the app makes anyway. `LiveChannelsTest` (8): an invalid file is rejected and the kept copy stays.
+
+**Found.** Environment Canada's GeoMet refuses a `time` with milliseconds ("Date format error, expecting %Y-%m-%dT%H:%M:%SZ"), and the shared `parseTimeDimension` gives `...:00.000Z`. The Android request sends whole seconds for that source. The web tuner builds the same URL from the same times, so its Canada radar would fail the same way outside its tests (NOAA and DWD take either form). Also: the web's RADAR NOT AVAILABLE card still says "UNITED STATES AND CANADA FOR NOW"; Android says "UNITED STATES, CANADA AND GERMANY".
+
+**Seen** on the emulator (`projects/nostalgex-internal/android/emulator-2026-11-15/r10-*.png`), with a stand-in for the relay because `/api/weather` was 404 on nostalgex.app that evening. Real forecasts through the stand-in, real radar from NOAA, ECCC and DWD.
 
 ## 2026-11-15, night (Apple TV 1.0.33 (58): CH 299 LOCAL WEATHER, live channel rules)
 

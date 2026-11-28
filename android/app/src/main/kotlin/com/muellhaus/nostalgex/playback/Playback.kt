@@ -13,6 +13,7 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.exoplayer.mediacodec.MediaCodecUtil
 import com.muellhaus.nostalgex.engine.AudioPick
 import com.muellhaus.nostalgex.engine.PlexClientProfile
+import com.muellhaus.nostalgex.engine.PlexLocal
 import com.muellhaus.nostalgex.engine.PlexDecision
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -380,7 +381,7 @@ class Playback(
         val exo = if (mb != null) mediaBrowserItem(mb, item, offsetSec, delivery, q, capped) else when (delivery) {
             Delivery.DIRECT_PLAY -> {
                 current = Current(item, offsetSec, delivery, null, System.currentTimeMillis())
-                ExoItem.Builder().setUri("$server${item.partKey}?X-Plex-Token=${Uri.encode(token)}").build()
+                ExoItem.Builder().setUri("$server${item.partKey}" + if (PlexLocal.hasToken(token)) "?X-Plex-Token=${Uri.encode(token)}" else "").build()
             }
             Delivery.TRANSCODE -> {
                 // The web tuner's request (plex-tuner.html playCurrentItem), with its own session
@@ -394,7 +395,7 @@ class Playback(
                     .appendQueryParameter("protocol", "hls")
                     .appendQueryParameter("offset", offsetSec.toString())
                     .appendQueryParameter("copyts", "1")
-                    .appendQueryParameter("X-Plex-Token", token)
+                    .apply { if (PlexLocal.hasToken(token)) appendQueryParameter("X-Plex-Token", token) }
                     .appendQueryParameter("session", session)
                     .appendQueryParameter("X-Plex-Session-Identifier", session)
                     .appendQueryParameter("X-Plex-Client-Identifier", plex.headers.getValue("X-Plex-Client-Identifier"))

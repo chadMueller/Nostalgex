@@ -71,6 +71,27 @@ object LibraryPicker {
     /** Rule 9: the saved state after a sign-in, whatever it was before. */
     fun afterSignIn() = State()
 
+    /**
+     * #338 (the Apple TV's `pickOwed`, #337): the sign-in is saved before CHOOSE YOUR LIBRARIES shows and the screen lives only in memory, so a
+     * launch after the app was closed there has to bring the choice back instead of reading every library. A flag is saved with the sign-in
+     * and set when the sign-in reaches this step; the CONTINUE, a sign-in with nothing to choose and sign-out clear it.
+     *
+     * Whether it is still owed once the libraries have been listed: yes while the picker is offered. With nothing to choose it clears, except
+     * on a relaunch that could not list any library at all (the server did not answer), which keeps it for the next launch.
+     */
+    fun pickStillOwed(sections: List<LibrarySection>, resuming: Boolean) = offersPicker(sections) || (resuming && sections.isEmpty())
+
+    /** What a launch does first. */
+    enum class LaunchStep { SIGN_IN, RESUME_PICK, ASK_BEFORE_LOADING, LOAD }
+
+    /** The first thing a launch does: a saved sign-in that still owes the library choice resumes it, before the unfinished-loads question and before any scan. */
+    fun launchStep(signedIn: Boolean, pickOwed: Boolean, askBeforeLoading: Boolean) = when {
+        !signedIn -> LaunchStep.SIGN_IN
+        pickOwed -> LaunchStep.RESUME_PICK
+        askBeforeLoading -> LaunchStep.ASK_BEFORE_LOADING
+        else -> LaunchStep.LOAD
+    }
+
     /** Rule 4: the ids of the servers that start on: the viewer's own, or all of them when none is. */
     fun defaultServerIds(servers: List<Pair<String, Boolean>>): List<String> {
         val own = servers.filter { it.second }

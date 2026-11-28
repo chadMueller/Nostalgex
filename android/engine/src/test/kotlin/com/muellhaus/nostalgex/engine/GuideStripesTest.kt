@@ -133,6 +133,24 @@ class GuideStripesTest {
         assertEquals(1, GuideStripes.neighbourIndexWrapping(0, 1, g))
     }
 
+    @Test fun selectOnTheStripeJumpsToTheFirstChannelOfThatBundle() {
+        val g = groups(listOf("A", "B", "C"))
+        // Each run's firstRow is the first channel of its bundle; the guide goes there and the row takes focus.
+        for (i in g.indices) assertEquals(g[i].firstRow, GuideStripes.jumpTargetRow(i, g, rowCount = 100))
+        assertEquals(0, GuideStripes.jumpTargetRow(0, g, 100))
+        // After Up and Down have stepped to another bundle (with wrap), select goes to that one.
+        val stepped = GuideStripes.neighbourIndexWrapping(2, 1, g)
+        assertEquals(g[0].firstRow, GuideStripes.jumpTargetRow(stepped, g, 100))
+    }
+
+    @Test fun selectOnAStripeWithNoBundleOrNoRowDoesNothing() {
+        val g = groups(listOf(null, "A"))
+        assertNull(GuideStripes.jumpTargetRow(0, g, 100))
+        assertNull(GuideStripes.jumpTargetRow(null, g, 100))
+        assertNull(GuideStripes.jumpTargetRow(9, g, 100))
+        assertNull("a row the guide no longer has", GuideStripes.jumpTargetRow(1, g, rowCount = 0))
+    }
+
     @Test fun theWrappingStepSkipsUnnamedRunsAndStaysPutOnOneBundle() {
         val g = groups(listOf(null, "A", null, "B", null))
         assertEquals(1, GuideStripes.neighbourIndexWrapping(3, 1, g))

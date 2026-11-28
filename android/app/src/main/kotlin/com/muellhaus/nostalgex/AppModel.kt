@@ -42,6 +42,8 @@ import com.muellhaus.nostalgex.engine.PlexDecision
 import com.muellhaus.nostalgex.engine.PlexPinWait
 import com.muellhaus.nostalgex.engine.ScanResume
 import com.muellhaus.nostalgex.engine.ServerScan
+import com.muellhaus.nostalgex.engine.PlexLocal
+import com.muellhaus.nostalgex.engine.SettingsLoadStatus
 import com.muellhaus.nostalgex.engine.ServerSharing
 import com.muellhaus.nostalgex.engine.LaunchChannelMemory
 import com.muellhaus.nostalgex.engine.LibraryDiagnostics
@@ -67,6 +69,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.muellhaus.nostalgex.engine.ChannelConfig
+import com.muellhaus.nostalgex.engine.LiveChannels
+import com.muellhaus.nostalgex.engine.Weather
+import com.muellhaus.nostalgex.weather.WeatherController
 import com.muellhaus.nostalgex.engine.GuideChannel
 import com.muellhaus.nostalgex.engine.Lineup
 import com.muellhaus.nostalgex.engine.DailyManifest
@@ -92,6 +97,7 @@ import com.muellhaus.nostalgex.plex.PlexHttpException
 import com.muellhaus.nostalgex.plex.PlexLibrary
 import com.muellhaus.nostalgex.plex.PlexPin
 import com.muellhaus.nostalgex.plex.PlexServer
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
@@ -156,6 +162,8 @@ sealed interface ConnectStep {
     data class SignIn(val server: CheckedServer) : ConnectStep
     data class QuickConnect(val server: CheckedServer, val code: String?) : ConnectStep
     data class SigningIn(val server: CheckedServer) : ConnectStep
+    /** I-057: the address of a Plex server that needs no plex.tv sign-in; `checking` while its /identity and libraries are asked. */
+    data class LocalPlex(val checking: Boolean = false) : ConnectStep
 }
 
 /** LAN discovery on the find screen. */
@@ -168,6 +176,8 @@ sealed interface Discovery {
 
 /** Everything the screens show, and every action the remote takes. One per activity. */
 class AppModel(private val context: Context) : Playback.Listener {
+    /** The application context, for the pieces that draw or play from the app's own resources (the weather channel). */
+    val appContext: Context get() = context
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val prefs = Prefs(context)
     private val versionName = context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "0"
@@ -481,6 +491,7 @@ class AppModel(private val context: Context) : Playback.Listener {
             // AppState.expireSleepTimer: pause, drop the transcode, back to the guide; the sign-in stays.
             playback.pause()
             watchReporter.onPause()
+            weather.deactivate()
             cancelSleepTimer()
             fullScreen = false
         }
@@ -625,7 +636,7 @@ class AppModel(private val context: Context) : Playback.Listener {
                     .appendQueryParameter("url", thumb)
                     .appendQueryParameter("width", "300")
                     .appendQueryParameter("height", "450")
-                    .appendQueryParameter("X-Plex-Token", item.serverToken ?: "")
+                    .apply { if (PlexLocal.hasToken(item.serverToken)) appendQueryParameter("X-Plex-Token", item.serverToken) }
                     .build().toString()
                 Request.Builder().url(url)
             }
@@ -750,12 +761,114 @@ class AppModel(private val context: Context) : Playback.Listener {
      * channels.json and channels-memberships.json (1.3 MB), parsed once per launch and started
      * at once, so the parse overlaps the library read instead of following it.
      */
-    private val channelData: Deferred<Pair<ChannelConfig, JsonObject?>> = scope.async(Dispatchers.Default) {
+    private val liveChannels = LiveChannelsSetup.create(context)
+    @Volatile private var channelData: Deferred<Pair<ChannelConfig, JsonObject?>> = scope.async(Dispatchers.Default) {
         val t0 = SystemClock.elapsedRealtime()
-        val config = ChannelConfig(Json.parseToJsonElement(asset("channels.json")).jsonObject)
+        // N-074: the last good copy fetched from nostalgex.app, else the bundled one. Files only, no network on this path.
+        val loaded = liveChannels.load()
+        val config = loaded.config
         val memberships = runCatching { Json.parseToJsonElement(asset("channels-memberships.json")).jsonObject }.getOrNull()
-        Log.i(TAG, "CONFIG channels.json v${config.version} and memberships parsed in ${SystemClock.elapsedRealtime() - t0} ms")
+        Log.i(TAG, "CONFIG channels.json v${config.version} (${loaded.source}) and memberships parsed in ${SystemClock.elapsedRealtime() - t0} ms")
         config to memberships
+    }
+    /** A copy fetched from nostalgex.app that passed the checks, waiting for the next guide rebuild (N-074). Never applied under a playing guide on its own. */
+    @Volatile private var pendingChannels: ChannelConfig? = null
+
+    // ── LOCAL WEATHER, CH 299 (I-016) ──
+
+    val weather = WeatherController(context, scope)
+    private val weatherGuideChannel = GuideChannel(
+        ChannelConfig.StockChannel(Weather.CHANNEL_ID, Weather.CHANNEL_NUMBER, Weather.CHANNEL_NAME, Weather.CHANNEL_COLOR, "weather", 0, null, null, false),
+        emptyList(), weather = true,
+    )
+
+    init {
+        // A forecast arrived or the numbers moved: the info panel's line is rebuilt with the guide's schedules, not a minute later.
+        weather.onUpdated = {
+            val l = lineup
+            if (l != null) scope.launch {
+                withContext(Dispatchers.Default) { l.rebuildSchedules() }
+                scheduleTick++
+            }
+        }
+    }
+
+    /** The channel's row in the guide while its switch in Settings is on; never in demo mode. */
+    private fun weatherRow(): Lineup.WeatherRow? =
+        if (!weather.channelOn || demoMode) null
+        else Lineup.WeatherRow(
+            weatherGuideChannel,
+            place = { weather.place?.let(Weather::placeLabel).orEmpty() },
+            temperature = { weather.model?.let { "${Weather.fmtTemp(it.current.tempC, weather.units)}\u00B0${weather.units}" }.orEmpty() },
+            summary = {
+                weather.model?.let { Weather.infoSummary(it, weather.units) }
+                    ?: if (weather.place == null) Weather.NO_PLACE_SUMMARY else Weather.SUMMARY
+            },
+        )
+
+    /** The switch, the place or the units changed: the guide's row and the info panel say so, and the channel leaves the air if it was switched off. */
+    fun weatherChanged() {
+        val l = lineup ?: return
+        scope.launch {
+            withContext(Dispatchers.Default) {
+                l.setWeather(weatherRow())
+                l.rebuildSchedules()
+            }
+            // Switched off while it is on: the guide has nothing at this number, so the first channel is tuned.
+            val on = channel
+            if (on != null && on.weather && l.channels.none { it.id == on.id }) l.channels.firstOrNull()?.let { tuneFromViewer(it) }
+            scheduleTick++
+        }
+    }
+
+    /** The place finder over the shards in the app's assets (weather/places): nothing is asked of the network. */
+    val weatherPlaces: Weather.PlaceIndex by lazy {
+        Weather.PlaceIndex { path ->
+            runCatching { Json.parseToJsonElement(context.assets.open("weather/$path").bufferedReader().use { it.readText() }) }.getOrNull()
+        }
+    }
+
+    /** SET LOCATION on the weather channel's card: Settings, CHANNELS & BUNDLES, LOCAL WEATHER, with focus on LOCATION. Back returns to the guide. */
+    fun openWeatherSettings() {
+        fullScreen = false
+        openSettings()
+        settingsCategory = SettingsCategory.CHANNELS
+        paneSwapping = true
+        channelsPage = "weather"
+        settingsOnRail = false
+        focusPane("weather_place")
+    }
+
+    fun chooseWeatherPlace(p: Weather.Place) { weather.choosePlace(p); weatherChanged() }
+    fun clearWeatherPlace() { weather.clearPlace(); weatherChanged() }
+    fun chooseWeatherUnits(setting: String) { weather.chooseUnits(setting); weatherChanged() }
+    fun toggleWeatherChannel() { weather.switchChannel(!weather.channelOn); weatherChanged() }
+
+    /** The guide is about to be rebuilt anyway (a library load, a refresh, the music pass): take the waiting copy. */
+    private suspend fun adoptPendingChannels() {
+        val fresh = pendingChannels ?: return
+        pendingChannels = null
+        val memberships = channelData.await().second
+        Log.i(TAG, "CONFIG channels.json v${fresh.version} applied at this guide rebuild")
+        channelData = CompletableDeferred(fresh to memberships)
+    }
+
+    /**
+     * At launch and about every 24 hours while the app runs, ask the site for channels.json, behind everything else (its own thread, an 8 second
+     * limit). A copy that fails the checks is thrown away and the one in use stays (LiveChannels).
+     */
+    private val liveChannelsJob = scope.launch(Dispatchers.IO) {
+        while (isActive) {
+            val t0 = SystemClock.elapsedRealtime()
+            val r = liveChannels.refresh()
+            Log.i(TAG, "CONFIG live channels.json checked in ${SystemClock.elapsedRealtime() - t0} ms")
+            when (r) {
+                is LiveChannels.Refresh.Updated -> { pendingChannels = r.config; Log.i(TAG, "CONFIG live channels.json v${r.config.version} kept, applies at the next guide rebuild") }
+                is LiveChannels.Refresh.Unchanged -> Log.i(TAG, "CONFIG live channels.json unchanged")
+                is LiveChannels.Refresh.Kept -> Log.i(TAG, "CONFIG live channels.json not used (${r.reason}); keeping the copy in use")
+            }
+            delay(LiveChannels.REFRESH_MS)
+        }
     }
     /** franchises.json: the dictionary the franchise builder and the fold read. */
     private val franchiseDefinitions: Deferred<List<FranchiseDefinition>> = scope.async(Dispatchers.Default) {
@@ -791,13 +904,17 @@ class AppModel(private val context: Context) : Playback.Listener {
             launchRecorded = true
             launchGuard.recordLaunch()
         }
-        val signedIn = mbServer != null || (prefs.plexToken != null && prefs.servers.isNotEmpty())
-        when {
-            !signedIn -> showPicker()
-            launchGuard.shouldAskBeforeLoading() -> screen = Screen.UnfinishedLoads
-            else -> loadLibrary()
+        // #338: closed on CHOOSE YOUR LIBRARIES last time, so the choice is still owed and nothing is scanned before it (AppState.resumeLibraryPickIfOwed).
+        when (LibraryPicker.launchStep(signedIn, prefs.libraryPickOwed, askBeforeLoading = signedIn && launchGuard.shouldAskBeforeLoading())) {
+            LibraryPicker.LaunchStep.SIGN_IN -> showPicker()
+            LibraryPicker.LaunchStep.RESUME_PICK -> chooseLibrariesOrScan(resuming = true)
+            LibraryPicker.LaunchStep.ASK_BEFORE_LOADING -> screen = Screen.UnfinishedLoads
+            LibraryPicker.LaunchStep.LOAD -> loadLibrary()
         }
     }
+
+    /** Signed in to a server: Jellyfin or Emby, or Plex by plex.tv or locally. */
+    private val signedIn: Boolean get() = mbServer != null || prefs.plexSignedIn
 
     /** TRY AGAIN after two unfinished loads: the next load gets the full allowance again. */
     fun tryLoadingAgain() {
@@ -877,8 +994,7 @@ class AppModel(private val context: Context) : Playback.Listener {
                             screen = Screen.ChooseServers(servers)
                         } else {
                             forgetFailuresUnlessShared(servers.map { ServerSharing.Ref(it.machineIdentifier, it.url) })
-                            prefs.plexToken = token
-                            prefs.servers = servers
+                            prefs.saveAccountSignIn(token, servers)
                             chooseLibrariesOrScan()
                         }
                         return@launch
@@ -893,6 +1009,63 @@ class AppModel(private val context: Context) : Playback.Listener {
                 screen = Screen.SignIn(null, "COULD NOT REACH PLEX.TV. CHECK YOUR CONNECTION")
             }
         }
+    }
+
+    // ── LOCAL SERVER (NO PLEX.TV), I-057 ─────────────────────────────────
+
+    /** LOCAL SERVER (NO PLEX.TV) on the Plex code screen: the code is dropped and the address screen opens. */
+    fun typeLocalPlexAddress() {
+        signInJob?.cancel()
+        connectJob?.cancel()
+        go(ConnectStep.LocalPlex())
+    }
+
+    /**
+     * CONNECT on the address screen (the Apple TV's `connectLocalPlex`): the address with Plex's port added when none was typed, its /identity,
+     * then its libraries with no token; signed in with an empty token and the "no plex.tv" flag saved. Nothing here asks plex.tv.
+     */
+    fun connectLocalPlex(raw: String) {
+        lastAddress = raw
+        val urls = PlexLocal.candidates(raw)
+        if (urls.isEmpty()) {
+            go(ConnectStep.LocalPlex(), message = "Type your Plex server's address.")
+            return
+        }
+        connectJob?.cancel()
+        go(ConnectStep.LocalPlex(checking = true))
+        connectJob = scope.launch {
+            var last: Throwable? = null
+            for (url in urls) {
+                try {
+                    val found = plex.checkLocalServer(url)
+                    Log.i(TAG, "LOCAL PLEX \"${found.name}\" answered at $url with no sign-in")
+                    finishLocalPlexSignIn(PlexServer(found.name, found.machineIdentifier.ifEmpty { url }, url, token = ""))
+                    return@launch
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: PlexClient.PlexUnauthorizedException) {
+                    Log.i(TAG, "LOCAL PLEX $url wants a sign-in (HTTP ${e.code})")
+                    go(ConnectStep.LocalPlex(), message = PlexLocal.NEEDS_AUTH_MESSAGE)
+                    return@launch
+                } catch (e: Exception) {
+                    last = e
+                }
+            }
+            Log.w(TAG, "Local Plex not reachable", last)
+            go(
+                ConnectStep.LocalPlex(),
+                message = if (last is PlexClient.NotPlexException) "That address answered, but not as a Plex server. Check the address and port (Plex uses 32400)."
+                else unreachableMessage(last ?: java.io.IOException(), "Plex"),
+            )
+        }
+    }
+
+    private fun finishLocalPlexSignIn(server: PlexServer) {
+        endBackgroundWork()
+        mbServer = null
+        forgetFailuresUnlessShared(listOf(ServerSharing.Ref(server.machineIdentifier, server.url)))
+        prefs.saveLocalPlexSignIn(server)
+        chooseLibrariesOrScan()
     }
 
     // ── Demo mode (AppState.enterDemoMode) ───────────────────────────────
@@ -988,6 +1161,8 @@ class AppModel(private val context: Context) : Playback.Listener {
             is ConnectStep.SignIn -> backToFind(step.server.kind)
             is ConnectStep.QuickConnect -> backToFind(step.server.kind)
             is ConnectStep.SigningIn -> usePassword(step.server)
+            // Back from the local address goes to the Plex code again.
+            is ConnectStep.LocalPlex -> signIn()
         }
     }
 
@@ -1158,14 +1333,20 @@ class AppModel(private val context: Context) : Playback.Listener {
      * this sign-in; with more than one, the viewer can leave some out before the first scan
      * touches them. One library (or none readable: the scan reports its own error) scans at once.
      */
-    private fun chooseLibrariesOrScan() {
+    private fun chooseLibrariesOrScan(resuming: Boolean = false) {
+        // Owed from here (#338): the sign-in is already saved, so a launch before the choice is made must come back to this step.
+        prefs.libraryPickOwed = true
         // Every sign-in starts again (N-016 rule 9): every library on, every hidden one off, and the old single hidden switch gone.
         saveChoices(LibraryPicker.afterSignIn())
         prefs.clearLegacyHiddenSwitch()
         screen = Screen.Loading("READING YOUR ${backendName.uppercase()} LIBRARY")
         scope.launch {
             val sections = loadAllSections()
+            // A disconnect while the libraries were being read: nothing is signed in to choose for.
+            if (!signedIn) return@launch
             availableSections = sections
+            // Still owed while the picker is offered; cleared when there is nothing to choose, unless a relaunch could not list any library.
+            prefs.libraryPickOwed = LibraryPicker.pickStillOwed(sections, resuming)
             Log.i(TAG, "LIBRARIES ${sections.size} on ${selectedServers.size} server(s)")
             // Offered only when there is something to choose: more than one library, or a hidden one (it starts off) (N-016 rule 8).
             if (LibraryPicker.offersPicker(sections)) screen = Screen.ChooseLibraries(sections) else loadLibrary()
@@ -1181,8 +1362,7 @@ class AppModel(private val context: Context) : Playback.Listener {
         Log.i(TAG, "SERVERS ${picked.size} of ${servers.size} chosen")
         pendingPlexToken = null
         forgetFailuresUnlessShared(picked.map { ServerSharing.Ref(it.machineIdentifier, it.url) })
-        prefs.plexToken = token
-        prefs.servers = picked
+        prefs.saveAccountSignIn(token, picked)
         chooseLibrariesOrScan()
     }
 
@@ -1191,6 +1371,7 @@ class AppModel(private val context: Context) : Playback.Listener {
         val sections = (screen as? Screen.ChooseLibraries)?.sections ?: return
         if (included.isEmpty()) return
         saveChoices(LibraryPicker.withOn(sections, included))
+        prefs.libraryPickOwed = false
         Log.i(TAG, "LIBRARIES ${included.size} of ${sections.size} included")
         loadLibrary()
     }
@@ -1204,7 +1385,6 @@ class AppModel(private val context: Context) : Playback.Listener {
         if (on && enabledSectionCount <= 1) return
         saveChoices(LibraryPicker.toggled(section, pickerState))
         libraryStore.clear()
-        closeSettings()
         playback.stop()
         loadLibrary(afterSwitch = true)
     }
@@ -1241,7 +1421,7 @@ class AppModel(private val context: Context) : Playback.Listener {
 
     /** The category the pane shows. It follows focus on the rail, with no press. */
     var settingsCategory by mutableStateOf(SettingsCategory.PLAYBACK)
-    /** The CHANNELS & BUNDLES sub-page on show: "packages", "missing", or null for its list. */
+    /** The CHANNELS & BUNDLES sub-page on show: "packages", "missing", "franchises", "collections", "weather", or null for its list. */
     var channelsPage: String? by mutableStateOf(null)
     /** Whether focus is on the rail (true) or in the pane's rows. Set by the rail's rows. */
     var settingsOnRail by mutableStateOf(true)
@@ -1273,6 +1453,7 @@ class AppModel(private val context: Context) : Playback.Listener {
         paneSwapping = false
         paneTickHandled = paneFocusTick
         playback.player.volume = 0f
+        weather.mute(true)
         refreshServers()
         refreshSections()
     }
@@ -1283,6 +1464,7 @@ class AppModel(private val context: Context) : Playback.Listener {
         noteRemoteActivity()
         settingsPicker = null
         playback.player.volume = 1f
+        weather.mute(false)
     }
 
     /** Right or OK on the rail, or a link row: focus a pane row (`key`), or its first. */
@@ -1316,6 +1498,7 @@ class AppModel(private val context: Context) : Playback.Listener {
             !settingsOnRail && channelsPage == "missing" -> { paneSwapping = true; channelsPage = "packages"; focusPane("channels_missing") }
             !settingsOnRail && channelsPage == "packages" -> { paneSwapping = true; channelsPage = null; focusPane("channels_packages") }
             !settingsOnRail && channelsPage == "franchises" -> { paneSwapping = true; channelsPage = null; focusPane("channels_franchises") }
+            !settingsOnRail && channelsPage == "weather" -> { paneSwapping = true; channelsPage = null; focusPane("channels_weather") }
             !settingsOnRail && channelsPage == "collections" -> { paneSwapping = true; channelsPage = null; focusPane("channels_collections") }
             !settingsOnRail -> focusRail()
             else -> { closeSettings(); return false }
@@ -1449,7 +1632,8 @@ class AppModel(private val context: Context) : Playback.Listener {
         get() = (availableServers + selectedServers).distinctBy { it.machineIdentifier }
 
     private fun refreshServers() {
-        if (mbServer != null) return
+        // A local server with no plex.tv sign-in has nothing to ask plex.tv about (I-057).
+        if (mbServer != null || !PlexLocal.asksPlexTv(prefs.plexNoPlexTv)) return
         val token = prefs.plexToken ?: return
         scope.launch {
             availableServers = runCatching { plex.discoverServers(token, includeShared = true) }.getOrDefault(availableServers)
@@ -1463,7 +1647,7 @@ class AppModel(private val context: Context) : Playback.Listener {
         val included = current.any { it.machineIdentifier == server.machineIdentifier }
         if (included && current.size <= 1) return
         prefs.servers = if (included) current.filterNot { it.machineIdentifier == server.machineIdentifier } else current + server
-        closeSettings()
+        // Settings stays open: the progress shows on this page (SettingsLoadStatus), and the guide shows its own block if the viewer leaves.
         playback.stop()
         loadLibrary(afterSwitch = true)
     }
@@ -1675,9 +1859,12 @@ class AppModel(private val context: Context) : Playback.Listener {
                         }
                         override suspend fun build(items: List<MediaItem>): Lineup {
                             step(LoadPhase.BUILDING)
-                            return buildLineup(items, "read") { done, total ->
+                            return buildLineup(items, "read", { done, total ->
                                 if (onScreenFor(LoadPhase.BUILDING)) step(LoadPhase.BUILDING, progress = done.toFloat() / maxOf(total, 1), caption = "Channel $done of $total")
-                            }
+                            }, onSchedule = {
+                                // The channels are matched; the schedules are packed next (the Settings page says so).
+                                if (inGuide && current()) guideLoad = guideLoad?.copy(detail = SettingsLoadStatus.SCHEDULE)
+                            })
                         }
                         override suspend fun show(built: Lineup): Boolean {
                             step(LoadPhase.FINISHING)
@@ -1723,6 +1910,8 @@ class AppModel(private val context: Context) : Playback.Listener {
         // userFacingLoadLibraryError: nothing usable came back, so say what happened and what to check.
         e is LoadStalled && e.userInitiated -> "Stopped waiting. Nothing had come back from your server, so no channels were built. Retry when the connection looks better."
         e is LoadStalled -> "Your server stopped sending data partway through the scan and never resumed. Check that it is awake and reachable on this network, then Retry."
+        // No plex.tv sign-in to expire: the server stopped letting this network in (I-057).
+        e is PlexHttpException && (e.code == 401 || e.code == 403) && mbServer == null && prefs.plexNoPlexTv -> PlexLocal.NEEDS_AUTH_MESSAGE
         e is PlexHttpException && e.code == 401 -> "Session expired. Please reconnect in Settings."
         e is MediaBrowserHttpException && e.code == 401 -> "Session expired. Please reconnect in Settings."
         e is MediaBrowserHttpException -> "$backendName returned HTTP ${e.code}. Check the server is running, then try again."
@@ -1982,8 +2171,9 @@ class AppModel(private val context: Context) : Playback.Listener {
         }
     }
 
-    private suspend fun buildLineup(items: List<MediaItem>, source: String, onBuild: (Int, Int) -> Unit = { _, _ -> }): Lineup = withContext(Dispatchers.Default) {
+    private suspend fun buildLineup(items: List<MediaItem>, source: String, onBuild: (Int, Int) -> Unit = { _, _ -> }, onSchedule: () -> Unit = {}): Lineup = withContext(Dispatchers.Default) {
         val t0 = SystemClock.elapsedRealtime()
+        adoptPendingChannels()
         val (config, memberships) = channelData.await()
         withContext(Dispatchers.Main) { bundles = config.bundles }
         // Only the wait: the parse itself runs while the library is read.
@@ -1993,6 +2183,7 @@ class AppModel(private val context: Context) : Playback.Listener {
         val lineup = Lineup(config, memberships, DailyManifest(ZoneId.systemDefault(), manifestStore), serverKey, mbServer?.kind ?: "plex", franchiseDefinitions.await())
         lineup.watershed = prefs.watershed
         lineup.franchiseChoices = franchiseChoices()
+        lineup.setWeather(weatherRow())
         var built = 0
         val switchedOn = lineup.build(items, prefs.enabledBundles, serverCollections) { done, total ->
             built = maxOf(built, done)
@@ -2010,6 +2201,7 @@ class AppModel(private val context: Context) : Playback.Listener {
                 "${f.found.count { it.isCovered }} on classics; ${f.channels.size} runtime channel(s)")
         }
         val tFilter = SystemClock.elapsedRealtime()
+        onSchedule()
         lineup.rebuildSchedules()
         Log.i(TAG, "LINEUP ($source) ${items.size} items; $built channels in ${tFilter - t0} ms (config ${configMs}, item facts ${lineup.prepareMs}, filter ${tFilter - t0 - configMs - lineup.prepareMs}); " +
             "${lineup.channels.size} in the guide; schedules in ${SystemClock.elapsedRealtime() - tFilter} ms; " +
@@ -2038,7 +2230,9 @@ class AppModel(private val context: Context) : Playback.Listener {
             return true
         }
         if (link != null) Log.i(TAG, "LINK channel $link names no channel in the guide; opening as usual")
-        tune(LaunchChannelMemory.channelToOpenFirst(built.channels, { it.id }, { it.name }, prefs.openOnLastChannel, prefs.lastWatchedChannel, demoMode)!!)
+        // LOCAL WEATHER is a guest in the guide: a launch opens on it only when it was the last channel watched and OPEN ON LAST CHANNEL is on.
+        val first = LaunchChannelMemory.channelToOpenFirst(built.channels, { it.id }, { it.name }, prefs.openOnLastChannel, prefs.lastWatchedChannel, demoMode)!!
+        tune(if (first.weather && !(prefs.openOnLastChannel && prefs.lastWatchedChannel?.id == first.id)) built.channels.firstOrNull { !it.weather } ?: first else first)
         return true
     }
 
@@ -2135,7 +2329,23 @@ class AppModel(private val context: Context) : Playback.Listener {
         failureRun.reset()
         skipsInRow = 0
         tuneCount++
+        if (ch.weather) return tuneWeather()
+        weather.deactivate()
         play(l.tune(ch))
+    }
+
+    /** LOCAL WEATHER: no programme. What was playing stops, and the app draws the loop and plays its own music. */
+    private fun tuneWeather() {
+        audioChosenFor = null
+        lastTracks = null
+        skipJob?.cancel()
+        failure = null
+        watershedHold = false
+        item = null
+        delivery = null
+        watchReporter.stop()
+        playback.stop()
+        weather.activate()
     }
 
     private fun play(pick: Pick?) {
@@ -2439,6 +2649,7 @@ class AppModel(private val context: Context) : Playback.Listener {
         // is not counted as an unfinished load at the next cold start.
         loadMark.released()
         scope.cancel()
+        weather.release()
         watchReporter.stop()
         playback.release()
     }

@@ -222,7 +222,8 @@ fun WatchScreen(model: AppModel) {
                     // Settings steps back one level at a time; from the rail it closes, back to the live row.
                     model.settingsOpen -> if (!model.settingsBack()) focusLive()
                     // The package sidebar closes back to the guide (BundleJumpSidebar's onExitCommand).
-                    sidebarOpen -> { sidebarOpen = false; focusLive() }
+                    // Back from the bundle list closes it where the guide was, without jumping to a bundle or to the live row.
+                    sidebarOpen -> { sidebarOpen = false; focusedId?.let { focusTarget = it; focusRequest++ } ?: focusLive() }
                     // An open picker first: dropping out of the panel from inside a list would lose it on a mis-press.
                     model.fullScreen && picker != null -> picker = null
                     model.fullScreen && overlay != Overlay.NONE -> overlay = Overlay.NONE
@@ -300,6 +301,12 @@ fun WatchScreen(model: AppModel) {
                             modifier = Modifier.fillMaxSize().clipToBounds(),
                         )
                     }
+                    // LOCAL WEATHER (CH 299) has no programme: the app draws the loop over the empty player.
+                    // Opaque first, so the last programme's picture (a surface keeps its last frame) never shows through.
+                    if (model.channel?.weather == true) {
+                        Box(Modifier.fillMaxSize().background(Color(0xFF0A0A1A)))
+                        WeatherScreen(model, Modifier.fillMaxSize())
+                    }
                     // RETRO MODE's CRT look over the picture, then the tuning card on a slow start.
                     if (model.retroMode) CrtOverlay()
                     TuningOverlay(
@@ -369,9 +376,14 @@ private fun FullScreen(
                     AndroidKeyEvent.KEYCODE_DPAD_LEFT, AndroidKeyEvent.KEYCODE_CHANNEL_DOWN -> { if (down) { model.previousChannel(); onFlash() }; true }
                     // Up: the mini channel strip, from the bottom. Down: Now Playing, from the top.
                     AndroidKeyEvent.KEYCODE_DPAD_UP -> { if (!down) onOverlay(Overlay.STRIP); true }
-                    AndroidKeyEvent.KEYCODE_DPAD_DOWN -> { if (!down) onOverlay(Overlay.PANEL); true }
+                    // (LOCAL WEATHER plays no programme, so there is no Now Playing to open.)
+                    AndroidKeyEvent.KEYCODE_DPAD_DOWN -> { if (!down && model.item != null) onOverlay(Overlay.PANEL); true }
                     // OK flashes the OSD (live TV: nothing to pause).
-                    AndroidKeyEvent.KEYCODE_DPAD_CENTER, AndroidKeyEvent.KEYCODE_ENTER, AndroidKeyEvent.KEYCODE_INFO -> { if (!down) onFlash(); true }
+                    AndroidKeyEvent.KEYCODE_DPAD_CENTER, AndroidKeyEvent.KEYCODE_ENTER, AndroidKeyEvent.KEYCODE_INFO -> {
+                        // LOCAL WEATHER with no location: OK is the card's SET LOCATION, and opens the same page as Settings.
+                        if (!down) { if (model.channel?.weather == true && model.weather.place == null) model.openWeatherSettings() else onFlash() }
+                        true
+                    }
                     else -> false
                 }
             },
@@ -597,7 +609,8 @@ private fun InfoPanel(model: AppModel, ch: GuideChannel, schedule: Schedule, pla
         // the guide's cursor is on, not the live one, is shown as it is on the schedule, with its time range (I-089).
         val item = preview?.item ?: playingItem ?: np!!.item
         val next = if (preview != null) GuideCursor.after(schedule.entries, preview) else schedule.upNext
-        val episodeLine = if (item.type == "episode") listOfNotNull(item.seTag, item.episodeTitle?.takeIf { it.isNotEmpty() }).joinToString("  ") else ""
+        val isLoop = item.librarySource == "weather"
+        val episodeLine = if (isLoop) item.episodeTitle.orEmpty() else if (item.type == "episode") listOfNotNull(item.seTag, item.episodeTitle?.takeIf { it.isNotEmpty() }).joinToString("  ") else ""
         val genres = item.musicGenreDisplay
         val sections = InfoPanelLayout.sections(
             hasArtist = !item.artist.isNullOrEmpty(),
@@ -641,7 +654,13 @@ private fun InfoPanel(model: AppModel, ch: GuideChannel, schedule: Schedule, pla
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-            InfoPanelSection.PROGRESS -> if (preview != null) {
+            // LOCAL WEATHER is always live: a full bar and LIVE, no times.
+            InfoPanelSection.PROGRESS -> if (isLoop) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(u(10)), modifier = Modifier.padding(bottom = sectionGap)) {
+                    Box(Modifier.weight(1f).height(u(4)).clip(RoundedCornerShape(u(2))).background(color))
+                    Text("LIVE", style = font(VT323, 24, Color.White.copy(alpha = 0.55f)))
+                }
+            } else if (preview != null) {
                 // When it is on, where the progress bar is.
                 Text(
                     "${time(preview.startSec)} - ${time(preview.endSec)}",
@@ -810,6 +829,16 @@ private fun Guide(
         target?.let(onFocusTarget)
     }
     fun openBundleList() { stripeMode = false; onSidebar(true) }
+    // Select on the stripe: the guide goes to the first channel of the bundle it is on, with focus on that row (the bundle list, on Left, is
+    // where select used to go).
+    fun selectBundle() {
+        val target = GuideStripes.jumpTargetRow(stripeGroupIndex, stripeGroups, channels.size) ?: return
+        val index = if (target == 0 && offer != null) 0 else target + lead
+        stripeMode = false
+        suppressFocusScroll = true
+        scope.launch { listState.animateScrollToItem(index); delay(400); suppressFocusScroll = false }
+        onFocusTarget(channels[target].id)
+    }
 
     BoxWithConstraints(
         Modifier
@@ -823,7 +852,7 @@ private fun Guide(
                         AndroidKeyEvent.KEYCODE_DPAD_DOWN -> { if (down) jumpBundle(1); true }
                         AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> { if (down) returnFromStripe(); true }
                         AndroidKeyEvent.KEYCODE_DPAD_LEFT -> { if (down) openBundleList(); true }
-                        AndroidKeyEvent.KEYCODE_DPAD_CENTER, AndroidKeyEvent.KEYCODE_ENTER -> { if (e.type == KeyEventType.KeyUp) openBundleList(); true }
+                        AndroidKeyEvent.KEYCODE_DPAD_CENTER, AndroidKeyEvent.KEYCODE_ENTER -> { if (e.type == KeyEventType.KeyUp) selectBundle(); true }
                         else -> false
                     }
                 }
@@ -1117,7 +1146,9 @@ private fun segments(entries: List<ScheduleEntry>, windowStart: Long, duration: 
 }
 
 private fun entryTitle(e: ScheduleEntry): String =
-    if (e.item.type == "episode") listOfNotNull(e.item.title, e.item.episodeTitle).joinToString(": ") else e.item.title
+    // LOCAL WEATHER's bar: its name and the temperature now, not the place (the info panel has that).
+    if (e.item.librarySource == "weather") listOfNotNull(e.item.title, e.item.seTag).joinToString("  ")
+    else if (e.item.type == "episode") listOfNotNull(e.item.title, e.item.episodeTitle).joinToString(": ") else e.item.title
 
 @Composable
 private fun ProgramBlocks(schedule: Schedule?, watershedHold: Boolean, color: Color, focused: Boolean, cursorStart: Long?, programsWidth: Float, visibleStart: Long, now: Double) {
@@ -1152,6 +1183,8 @@ private fun ProgramBlocks(schedule: Schedule?, watershedHold: Boolean, color: Co
                                 when {
                                     isCursor -> Color.Transparent
                                     // Kept at 25% when focused: white titles stay at 4.5:1 on a bright channel colour.
+                                    // LOCAL WEATHER's bar is the row colour at 13% (the web tuner's): it is always on, so it is the quietest fill.
+                                    e.isNowPlaying && e.item.librarySource == "weather" -> color.copy(alpha = 0.13f)
                                     e.isNowPlaying -> color.copy(alpha = 0.25f)
                                     isPast -> Color.White.copy(alpha = 0.02f)
                                     else -> Color.Transparent
