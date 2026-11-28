@@ -87,6 +87,35 @@ function NxRunLibrarySectionsTests() as Integer
     kept = NxSectionsKept([{ key: "1" }, { key: "2" }, { key: "3" }], { "srv::2": true }, "srv", "key")
     NxCheck(r, "plex: the section list without the turned off one", NxToStr(kept.Count()) + kept[0].key + kept[1].key, "213")
 
+    ' The library pick a sign-in owes (#331): the launch asks for it again
+    ' instead of reading every library, until it is answered or not needed.
+    for each kind in ["plex", "jellyfin", "emby"]
+        reg = NxFakeRegistry()
+        reg.Write("servers", "[{}]")
+        NxCheck(r, kind + ": a saved sign-in, nothing owed, reads at launch", NxToStr(NxLaunchReadsLibrary(reg, kind, "tok")), "true")
+        NxOweLibraryPick(reg)
+        NxCheck(r, kind + ": owed after the sign-in saves its servers", NxToStr(NxLibraryPickOwed(reg)), "true")
+        NxCheck(r, kind + ": a pick owed doesn't read at launch", NxToStr(NxLaunchReadsLibrary(reg, kind, "tok")), "false")
+        NxLibraryPickSettled(reg)
+        NxCheck(r, kind + ": settled, the next launch reads", NxToStr(NxLaunchReadsLibrary(reg, kind, "tok")), "true")
+        NxCheck(r, kind + ": settled is no longer owed", NxToStr(NxLibraryPickOwed(reg)), "false")
+    end for
+    reg = NxFakeRegistry()
+    NxOweLibraryPick(reg)
+    NxCheck(r, "no servers saved: no launch read, owed or not", NxToStr(NxLaunchReadsLibrary(reg, "jellyfin", "")), "false")
+    reg = NxFakeRegistry()
+    reg.Write("servers", "[{}]")
+    NxCheck(r, "plex: no token, no launch read", NxToStr(NxLaunchReadsLibrary(reg, "plex", "")), "false")
+    reg.Write("needsPick", "1")
+    NxCheck(r, "plex: a server pick owed, no launch read", NxToStr(NxLaunchReadsLibrary(reg, "plex", "tok")), "false")
+    NxCheck(r, "no registry: nothing owed, no launch read", NxToStr(NxLibraryPickOwed(invalid)) + " " + NxToStr(NxLaunchReadsLibrary(invalid, "emby", "")), "false false")
+    ' A sign-in's reset of the library choices leaves the pick owed: the flag is
+    ' written beside it, and the reset must not clear it.
+    reg = NxFakeRegistry()
+    NxOweLibraryPick(reg)
+    NxResetLibraryChoices(reg, NxFakeRegistry())
+    NxCheck(r, "the sign-in reset keeps the pick owed", NxToStr(NxLibraryPickOwed(reg)), "true")
+
     print "library section tests: "; r.pass; " passed, "; r.fail; " failed"
     return r.fail
 end function
