@@ -52,7 +52,7 @@ const source = readFileSync(engine, "utf8");
 // operation in the port shows up there first, and far more legibly.
 const hooked = source.replace(
   "const api = {",
-  "global.__nxRng = { splitmix64, makeSeededRNG, swiftShuffle, poolFingerprint };\n  const api = {",
+  "global.__nxRng = { splitmix64, makeSeededRNG, swiftShuffle, poolFingerprint, pairsIn };\n  const api = {",
 );
 if (hooked === source) throw new Error("upstream engine changed shape: no `const api = {`");
 new Function("globalThis", "module", hooked)(globalThis, undefined);
@@ -77,19 +77,22 @@ const poolA = [];
 });
 const DAY_START_A = 1700100000;
 
-// Copied verbatim from upstream scripts/nostalgex-schedule-order-smoke.mjs,
-// where they were produced by the real Swift on Apple Swift 6.2.1.
+// Copied verbatim from upstream scripts/nostalgex-schedule-order-smoke.mjs. They were produced by the real Swift on
+// Apple Swift 6.2.1 until 2026-11-19, when CLASSIC RERUNS changed to two consecutive episodes from a random spot
+// (EPISODE ORDER, I-103) and the strings were written again from the engine, after the Apple TV's own answers
+// (scripts/schedule-parity-golden.json) matched it byte for byte. These episodes carry no season or episode
+// number, so series order is the order they are listed in.
 const swift = {
   order: {
-    "INTER:1:20000": "m8,m3,m5,m4,m7,m2,m6,m9,m0,e22,e25,e03,e01,m1,e15,e13,e23,e21,e04,e05,e14,e12,e24,e02,e11",
-    "PROMO:1:20000": "m3,m5,m7,m2,m6,m9,e22,e25,e03,e01,m1,e15,e13,e23,e21,e04,e05,e14,e12,e24,e02,e11,m0,m4,m8",
-    "SEQ:1:20000": "m3,m1,m5,m7,m2,m6,m4,m9,e22,e25,e03,e01,e15,e13,e23,e21,e04,e05,e14,e12,e24,e02,e11,m0,m8",
-    "INTER:49:20431": "m1,e23,e24,m7,m3,m2,m9,m0,m5,m4,e03,e05,e14,e12,m8,m6,e22,e21,e02,e04,e11,e15,e25,e01,e13",
-    "PROMO:49:20431": "m1,e23,e24,m7,m3,m2,m9,m5,e03,e05,e14,e12,m6,e22,e21,e02,e04,e11,e15,e25,e01,e13,m0,m8,m4",
-    "SEQ:49:20431": "m3,m1,e23,e24,m7,m2,m9,m5,e03,e05,e14,e12,m6,m4,e22,e21,e02,e04,e11,e15,e25,e01,e13,m0,m8",
-    "INTER:141:20500": "m8,m9,m6,m2,m4,m3,m1,e21,e22,m5,e04,e05,m7,e12,e11,m0,e25,e24,e02,e01,e15,e13,e23,e03,e14",
-    "PROMO:141:20500": "m9,m6,m2,m3,m1,e21,e22,m5,e04,e05,m7,e12,e11,e25,e24,e02,e01,e15,e13,e23,e03,e14,m4,m8,m0",
-    "SEQ:141:20500": "m9,m6,m4,m2,m3,m1,e21,e22,m5,e04,e05,m7,e12,e11,e25,e24,e02,e01,e15,e13,e23,e03,e14,m8,m0",
+    "INTER:1:20000": "m7,m8,m3,e23,e24,m0,m4,m9,m2,e13,e14,m1,m5,m6,e03,e04,e25,e21,e15,e11,e05,e01,e22,e12,e02",
+    "PROMO:1:20000": "m7,m3,e23,e24,m9,m2,e13,e14,m1,m5,m6,e03,e04,e25,e21,e15,e11,e05,e01,e22,e12,e02,m0,m4,m8",
+    "SEQ:1:20000": "m7,m3,m1,e23,e24,m9,m2,e13,e14,m5,m6,m4,e03,e04,e25,e21,e15,e11,e05,e01,e22,e12,e02,m0,m8",
+    "INTER:49:20431": "m0,m6,e03,e04,m5,e15,e11,e25,e21,m1,m7,m2,m4,m3,m9,m8,e05,e01,e12,e13,e22,e23,e02,e14,e24",
+    "PROMO:49:20431": "m6,e03,e04,m5,e15,e11,e25,e21,m1,m7,m2,m3,m9,e05,e01,e12,e13,e22,e23,e02,e14,e24,m0,m8,m4",
+    "SEQ:49:20431": "m6,m4,e03,e04,m5,e15,e11,e25,e21,m3,m1,m7,m2,m9,e05,e01,e12,e13,e22,e23,e02,e14,e24,m0,m8",
+    "INTER:141:20500": "m2,m1,e25,e21,m6,m9,e04,e05,m3,m8,m7,e14,e15,m0,m5,m4,e22,e23,e01,e02,e11,e12,e24,e03,e13",
+    "PROMO:141:20500": "m2,m1,e25,e21,m6,m9,e04,e05,m3,m7,e14,e15,m5,e22,e23,e01,e02,e11,e12,e24,e03,e13,m4,m8,m0",
+    "SEQ:141:20500": "m2,m3,m1,e25,e21,m6,m4,m9,e04,e05,m7,e14,e15,m5,e22,e23,e01,e02,e11,e12,e24,e03,e13,m8,m0",
   },
   premiereOffset: {
     "1:m0": 72900, "1:m4": 79200, "1:m8": 81000, "1:e01": 84600,
@@ -209,12 +212,84 @@ const packDay = packCases.map((c) => ({
   blocks: blocks(M.packDay(c.pool, DAY_START_B, c.day, c.ch, new Set(c.aired), c.premiere, c.last)),
 }));
 
+// ── Fixture C: EPISODE ORDER (I-103) ────────────────────────────────────────
+// What the order reads: a show's id, season and episode tags in every form, two shows with one title (told apart
+// by their ids, or by their years where there is no id), a show held twice, and films. The engine's answers under
+// CLASSIC RERUNS and SHUFFLE; the Apple TV's own are in scripts/schedule-parity-golden.json and
+// scripts/episode-order-golden.json, which the port also runs.
+const poolC = [];
+const epC = (show, showKey, key, seTag, extra = {}) => poolC.push({ ratingKey: key, title: show, type: "episode", duration: 22, addedAt: 0, ...(showKey ? { showKey } : {}), ...(seTag === null ? {} : { seTag }), ...extra });
+// Alpha: two seasons of four, listed out of order. Bravo: episode numbers only, then a season-only tag and an untagged one.
+for (const [k, tag] of [["a5", "S02E01"], ["a2", "S01E02"], ["a1", "S01E01"], ["a8", "S02E04"], ["a3", "S01E03"], ["a6", "S02E02"], ["a4", "S01E04"], ["a7", "S02E03"]]) epC("Alpha", "A", k, tag);
+for (const [k, tag] of [["b3", "E03"], ["b1", "E01"], ["b4", "S02"], ["b2", "E02"], ["b5", ""]]) epC("Bravo", "B", k, tag);
+// The Office: a remake, two shows with one title and their own ids. Dragnet: no ids, told apart by year.
+for (const [sk, base] of [["O1", "o1"], ["O2", "o2"]]) for (let n = 1; n <= 3; n++) epC("The Office", sk, `${base}${n}`, `S01E0${n}`);
+for (const [year, base] of [[1951, "d1"], [1967, "d2"]]) for (let n = 1; n <= 3; n++) epC("Dragnet", null, `${base}${n}`, `S01E0${n}`, { year });
+// Echo: held twice under one id, two files for each of its first two episodes. Foxtrot: one episode, no tag at all.
+for (const [k, tag] of [["e1", "S01E01"], ["e1b", "S01E01"], ["e2", "S01E02"], ["e2b", "S01E02"], ["e3", "S01E03"]]) epC("Echo", "E", k, tag);
+epC("Foxtrot", "F", "f1", null);
+for (const [k, title, dur] of [["fm1", "Film One", 95], ["fm2", "Film Two", 110], ["fm3", "Film Three", 101]]) poolC.push({ ratingKey: k, title, type: "movie", duration: dur, addedAt: 0 });
+const keyed = (m) => [...m.entries()].map(([a, b]) => `${a}>${b}`).sort().join(",");
+const groupOf = (show, showKey) => poolC.filter((i) => i.type === "episode" && i.title === show && (showKey === undefined || i.showKey === showKey));
+const orderVectors = { seTags: {}, identity: {}, series: {}, dedupe: {}, next: {}, interleave: {}, pick: [], pairs: {}, packDay: [] };
+for (const tag of ["S01E04", "E04", "S02", "S10E100", "", "x", "S01E", "E", "S0E0", "SE", "s01e01", "S01E02E03"]) {
+  const n = M.seriesNumber({ seTag: tag });
+  orderVectors.seTags[tag] = n ? `${n.season}x${n.episode}` : "none";
+}
+for (const it of [poolC[0], poolC[8], poolC.find((i) => i.ratingKey === "d11"), poolC.find((i) => i.ratingKey === "fm1"), poolC.find((i) => i.ratingKey === "f1")]) orderVectors.identity[it.ratingKey] = M.showIdentity(it);
+orderVectors.series.alpha = ids(M.inSeriesOrder(groupOf("Alpha")));
+orderVectors.series.bravo = ids(M.inSeriesOrder(groupOf("Bravo")));
+orderVectors.dedupe.echo = ids(M.withoutSecondCopies(groupOf("Echo")));
+orderVectors.next.pool = keyed(M.seriesNext(poolC));
+orderVectors.next.film = keyed(M.seriesNext(poolC.filter((i) => i.type === "movie")));
+// interleaveByShow under each order; `next` given and not.
+for (const order of ["classic", "shuffle"]) {
+  M.setEpisodeOrder(order);
+  for (const [seed, day] of [[1, 20000], [7, DAY_B], [49, DAY_B + 1], [130, 25000]]) {
+    orderVectors.interleave[`${order}:${seed}:${day}`] = ids(M.interleaveByShow(poolC, seed, day, order, order === "classic" ? M.seriesNext(poolC) : null));
+  }
+  const ord = M.interleaveByShow(poolC, 7, DAY_B, order, order === "classic" ? M.seriesNext(poolC) : null);
+  orderVectors.pairs[order] = order === "classic" ? [...R.pairsIn(ord, M.seriesNext(poolC)).entries()].map(([a, b]) => `${a}>${b}`).join(",") : "";
+}
+M.setEpisodeOrder("classic");
+// pickCandidate with no occupancy: the first the two rules leave. queue: a1 a2 b1 a3 fm1 ...
+const qIds = ["a1", "a2", "b1", "a3", "fm1", "b2", "e1", "e2"];
+const queueC = qIds.map((k) => poolC.find((i) => i.ratingKey === k));
+for (const [name, keepShowOrder, avoidShow, start, avoidKey] of [
+  ["plain", false, null, 0, null],
+  ["keep order, at the head", true, null, 0, null],
+  ["keep order, behind its own show", true, null, 1, null],
+  ["avoid Alpha", false, "show_A", 0, null],
+  ["keep order and avoid Alpha", true, "show_A", 0, null],
+  ["avoid Bravo from the second", true, "show_B", 1, null],
+  ["avoid a key", false, null, 0, "a1"],
+]) {
+  const q = queueC.slice(start);
+  orderVectors.pick.push({ name, queue: q.map((i) => i.ratingKey), keepShowOrder, avoidShow, avoidKey, want: M.pickCandidate(q, 0, (i) => (q[i].duration || 0) * 60, null, 1, avoidKey, false, false, keepShowOrder, avoidShow) });
+}
+const packOrder = (order, c) => {
+  M.setEpisodeOrder(order);
+  const out = blocks(M.packDay(poolC, DAY_START_B, c.day, c.ch, new Set(c.aired), false, c.last));
+  M.setEpisodeOrder("classic");
+  return out;
+};
+for (const order of ["classic", "shuffle"]) {
+  for (const c of [{ name: "day", day: DAY_B, ch: 7, aired: [], last: null }, { name: "next day", day: DAY_B + 1, ch: 7, aired: ["a1", "a2", "o11", "o12"], last: "a2" }, { name: "other channel", day: DAY_B, ch: 130, aired: [], last: null }]) {
+    orderVectors.packDay.push({ name: `${order} ${c.name}`, order, dayStart: DAY_START_B, dayEnd: dayEndB, day: c.day, channel: c.ch, aired: c.aired, last: c.last, blocks: packOrder(order, c) });
+  }
+}
+const fpPool = poolC.filter((i) => (i.duration || 0) > 0);
+orderVectors.fingerprint = {};
+for (const order of ["classic", "shuffle"]) { M.setEpisodeOrder(order); orderVectors.fingerprint[order] = R.poolFingerprint(fpPool); }
+M.setEpisodeOrder("classic");
+
 const vectors = {
   generatedBy: "tests/gen-vectors.mjs",
   upstream: { repo: "https://github.com/chadMueller/Nostalgex", commit, engine: "scripts/nostalgex-daily-manifest.js" },
   fixtures: {
     A: { dayStart: DAY_START_A, pool: poolA },
     B: { dayStart: DAY_START_B, pool: poolB },
+    C: { dayStart: DAY_START_B, pool: poolC },
     small: { pool: small },
     single: { pool: single },
   },
@@ -223,6 +298,7 @@ const vectors = {
   premiereOffset,
   order,
   packDay,
+  episodeOrder: orderVectors,
 };
 const files = [
   [out, vectors],
@@ -305,7 +381,7 @@ const files = [
   // AudioPickGoldenTests.brs (audio-pick-golden.json), GuideStripesTests.brs
   // (guide-stripe-colours-golden.json) and LibraryPickerGoldenTests.brs
   // (library-picker-golden.json) and WeatherTests.brs (weather-golden.json, and weather-places-meta.json from public/) read them.
-  ...["franchise-golden.json", "franchise-lineup-golden.json", "filter-golden.json", "rating-golden.json", "season-golden.json", "schedule-dst-golden.json", "schedule-parity-golden.json", "watch-cleanup-golden.json", "stream-quality-golden.json", "utf8-repair-golden.json", "watershed-golden.json", "jellyfin-library-golden.json", "music-title-golden.json", "channel-requirements-golden.json", "audio-pick-golden.json", "guide-stripe-colours-golden.json", "library-picker-golden.json", "weather-golden.json"].map((g) =>
+  ...["franchise-golden.json", "franchise-lineup-golden.json", "filter-golden.json", "rating-golden.json", "season-golden.json", "schedule-dst-golden.json", "schedule-parity-golden.json", "episode-order-golden.json", "watch-cleanup-golden.json", "stream-quality-golden.json", "utf8-repair-golden.json", "watershed-golden.json", "jellyfin-library-golden.json", "music-title-golden.json", "channel-requirements-golden.json", "audio-pick-golden.json", "guide-stripe-colours-golden.json", "library-picker-golden.json", "weather-golden.json"].map((g) =>
     [join(here, "vectors", g), readFileSync(join(upstream, "scripts", g), "utf8")]),
   // The place files' own index, for WeatherTests.brs: every time zone it names has to be in the zone table.
   [join(here, "vectors", "weather-places-meta.json"), readFileSync(join(upstream, "public", "weather", "places", "meta.json"), "utf8")],

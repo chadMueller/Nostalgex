@@ -66,6 +66,7 @@
   <script type="text/brightscript" uri="pkg:/source/guide/PlaybackReport.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/RetroMode.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/Watershed.brs" />
+  <script type="text/brightscript" uri="pkg:/source/guide/EpisodeOrder.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/GuideText.brs" />
   <script type="text/brightscript" uri="pkg:/source/util/LibrarySections.brs" />
   <script type="text/brightscript" uri="pkg:/source/ui/Tokens.brs" />

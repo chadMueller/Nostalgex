@@ -138,24 +138,213 @@ function NxSlotSeconds(item as Object) as Integer
     return minutes
 end function
 
-' ── Interleave: shows in shuffled groups, at most two episodes in a row ─────
+' ── EPISODE ORDER (I-103) ───────────────────────────────────────────────────
+' CLASSIC RERUNS (the default, and the schedule every release before this one made apart
+' from which two episodes): two consecutive episodes of a show back to back, from a random
+' spot in the series. SHUFFLE: one episode at a time, picked at random. Movies are never
+' affected. Mirrors EpisodeOrder in the Apple TV app and `episodeOrder` in the engine; the
+' saved choice is the player section's "episodeOrder" ("shuffle", or nothing for classic).
 
-function NxInterleaveByShow(items as Object, seed as Integer, dayNumber as Integer) as Object
+' (The saved choice and its words are in source/guide/EpisodeOrder.brs.)
+
+' The season and episode of an item as the engine reads them, "S01E04", "E04" or "S02", "" for neither. An
+' item that carries a `seTag` (the golden files' items) is read as it says; an item the loaders made has
+' its seasonNumber and episodeNumber (a number of 0 or none says nothing, as the web loader's seTag).
+function NxEpisodeTag(item as Object) as String
+    if NxIsString(item.seTag) then return item.seTag
+    tag = ""
+    if NxIsNumber(item.seasonNumber) then
+        if item.seasonNumber <> 0 then tag = tag + "S" + NxPadDigits(item.seasonNumber, 2)
+    end if
+    if NxIsNumber(item.episodeNumber) then
+        if item.episodeNumber <> 0 then tag = tag + "E" + NxPadDigits(item.episodeNumber, 2)
+    end if
+    return tag
+end function
+
+' JS String(n).padStart(width, "0").
+function NxPadDigits(n as Dynamic, width as Integer) as String
+    digits = Int(n).ToStr()
+    if Len(digits) >= width then return digits
+    return Right(String(width, "0") + digits, width)
+end function
+
+' Season and episode from an item's tag: { season, episode }, a missing half 0; invalid when the item carries
+' neither. Mirrors SchedulePoolOrdering.seriesNumber.
+function NxSeriesNumber(item as Object) as Dynamic
+    ' An item the loaders made has its numbers: read them as the tag would give them, with no text made and no
+    ' pattern matched (this runs for every episode of a pool, a few times a pack).
+    if not NxIsString(item.seTag) then
+        season = 0
+        episode = 0
+        if NxIsNumber(item.seasonNumber) then season = Int(item.seasonNumber)
+        if NxIsNumber(item.episodeNumber) then episode = Int(item.episodeNumber)
+        if season = 0 and episode = 0 then return invalid
+        return { season: season, episode: episode }
+    end if
+    tag = item.seTag
+    if tag = "" then return invalid
+    found = NxRx("seriesTag", "^(?:S([0-9]+))?(?:E([0-9]+))?$").Match(tag)
+    if found.Count() = 0 then return invalid
+    s = ""
+    e = ""
+    if found.Count() > 1 then s = found[1]
+    if found.Count() > 2 then e = found[2]
+    if s = "" and e = "" then return invalid
+    season = 0
+    episode = 0
+    if s <> "" then season = s.ToInt()
+    if e <> "" then episode = e.ToInt()
+    return { season: season, episode: episode }
+end function
+
+' Whether two identities are the same text, case counted as Swift and JS count it (`=` ignores case).
+function NxSameIdentity(a as String, b as String) as Boolean
+    if a <> b then return false
+    for i = 1 to Len(a)
+        if Asc(Mid(a, i, 1)) <> Asc(Mid(b, i, 1)) then return false
+    end for
+    return true
+end function
+
+' Which show an episode belongs to: the server's id for the show (`showKey`: Plex grandparentRatingKey, Jellyfin
+' and Emby SeriesId) where the item has one, else the title and year. A film is its own group. Mirrors
+' SchedulePoolOrdering.showIdentity.
+function NxShowIdentity(item as Object) as String
+    if item.type <> "episode" then return "movie_" + NxToStr(item.ratingKey)
+    if item.showKey <> invalid then
+        if NxToStr(item.showKey) <> "" then return "show_" + NxToStr(item.showKey)
+    end if
+    year = ""
+    if NxTruthy(item.year) then year = NxToStr(item.year)
+    return "title_" + NxToStr(item.title) + "|" + year
+end function
+
+' One show's episodes with a second copy of the same season and episode left out; the first in the library's
+' order airs. Only a tag with both a season and an episode says two items are one episode. Mirrors
+' SchedulePoolOrdering.withoutSecondCopies.
+function NxWithoutSecondCopies(episodes as Object) as Object
+    if episodes.Count() < 2 then return episodes
+    seen = {}
+    out = []
+    for each item in episodes
+        keep = true
+        if item.type = "episode" then
+            n = NxSeriesNumber(item)
+            ' Only a tag with both a season and an episode says two items are one episode.
+            if n <> invalid and NxHasBothNumbers(item) then
+                k = n.season.ToStr() + "x" + n.episode.ToStr()
+                if seen.DoesExist(k) then keep = false else seen[k] = true
+            end if
+        end if
+        if keep then out.Push(item)
+    end for
+    return out
+end function
+
+' Whether the item's tag has both a season (S) and an episode (E): the tag's text for an item that carries one, else
+' both numbers (a 0 or none leaves its letter out of the tag NxEpisodeTag makes).
+function NxHasBothNumbers(item as Object) as Boolean
+    if NxIsString(item.seTag) then return Instr(1, item.seTag, "S") > 0 and Instr(1, item.seTag, "E") > 0
+    if not NxIsNumber(item.seasonNumber) or not NxIsNumber(item.episodeNumber) then return false
+    return Int(item.seasonNumber) <> 0 and Int(item.episodeNumber) <> 0
+end function
+
+' The pairs in a day's ordering as it will air: the first's ratingKey to the second's. `follows` says which
+' episode follows which. Mirrors SchedulePoolOrdering.pairs.
+function NxPairsIn(ordered as Object, follows as Object) as Object
+    out = {}
+    out.SetModeCaseSensitive()
+    i = 0
+    while i + 1 < ordered.Count()
+        a = ordered[i].ratingKey
+        if follows.DoesExist(a) and follows[a] = ordered[i + 1].ratingKey then
+            out[a] = ordered[i + 1].ratingKey
+            i = i + 2
+        else
+            i = i + 1
+        end if
+    end while
+    return out
+end function
+
+' One show's episodes in series order; the unnumbered after the numbered, ties in the order they came. Sorted on a
+' text key that is never the same for two episodes (the index closes it), so the order does not depend on the
+' sort being stable.
+function NxInSeriesOrder(episodes as Object) as Object
+    rows = []
+    for i = 0 to episodes.Count() - 1
+        n = NxSeriesNumber(episodes[i])
+        if n <> invalid then
+            key = "0" + NxPadDigits(n.season, 10) + NxPadDigits(n.episode, 10)
+        else
+            key = "1" + "00000000000000000000"
+        end if
+        rows.Push({ k: key + NxPadDigits(i, 10), item: episodes[i] })
+    end for
+    rows.SortBy("k")
+    out = []
+    for each r in rows
+        out.Push(r.item)
+    end for
+    return out
+end function
+
+' For each episode in `pool`, the ratingKey of the one after it in its show's series order; the last is
+' followed by the first. A show with one episode has no entry. Mirrors SchedulePoolOrdering.seriesNext.
+function NxSeriesNext(pool as Object) as Object
+    groups = {}
+    groups.SetModeCaseSensitive()
+    order = []
+    for each item in pool
+        if item.type = "episode" then
+            key = NxShowIdentity(item)
+            if not groups.DoesExist(key) then
+                groups[key] = []
+                order.Push(key)
+            end if
+            groups[key].Push(item)
+        end if
+    end for
+    follows = {}
+    follows.SetModeCaseSensitive()
+    for each key in order
+        group = groups[key]
+        if group.Count() >= 2 then
+            ordered = NxInSeriesOrder(NxWithoutSecondCopies(group))
+            if ordered.Count() >= 2 then
+                for i = 0 to ordered.Count() - 1
+                    follows[ordered[i].ratingKey] = ordered[(i + 1) mod ordered.Count()].ratingKey
+                end for
+            end if
+        end if
+    end for
+    return follows
+end function
+
+' ── Interleave: shows in shuffled groups ────────────────────────────────────
+
+' Interleave items by show for the day (EPISODE ORDER, I-103). Mirrors SchedulePoolOrdering.interleaveByShow.
+' "classic": each show's episodes in series order from a random spot, two consecutive ones back to back
+' (`follows` says which follows which in the whole pool; an episode whose neighbour is missing airs alone).
+' "shuffle": each show's episodes in random order, one at a time. A title alone in its group draws nothing
+' from the generator.
+function NxInterleaveByShow(items as Object, seed as Integer, dayNumber as Integer, order = "classic" as String, follows = invalid as Dynamic) as Object
     if items.Count() <= 1 then
         copy = []
         copy.Append(items)
         return copy
     end if
 
-    ' Episodes group on title, which is the show title. Case matters, as in Swift.
+    ' Episodes group on the show's id, else its title and year. Case matters, as in Swift.
     groups = {}
     groups.SetModeCaseSensitive()
-    order = []
+    keys = []
     for each item in items
-        if item.type = "episode" then key = item.title else key = "movie_" + item.ratingKey
+        key = NxShowIdentity(item)
         if not groups.DoesExist(key) then
             groups[key] = []
-            order.Push(key)
+            keys.Push(key)
         end if
         groups[key].Push(item)
     end for
@@ -165,14 +354,34 @@ function NxInterleaveByShow(items as Object, seed as Integer, dayNumber as Integ
     if s& < 0 then s& = -s&
     rng = NxSeededRng(s& + 1 + dayNumber)
 
+    classic = order <> "shuffle"
+    if classic and follows = invalid then follows = NxSeriesNext(items)
+    if follows = invalid then follows = {}
+
     orderedGroups = []
-    for each key in order
-        NxSwiftShuffle(groups[key], rng)
-        orderedGroups.Push(groups[key])
+    for each key in keys
+        ' A second copy of an episode does not air, under either order.
+        list = NxWithoutSecondCopies(groups[key])
+        if list.Count() < 2 then
+            orderedGroups.Push(list)
+        else if classic then
+            sorted = NxInSeriesOrder(list)
+            start = NxRngBounded(rng, sorted.Count())
+            rotated = []
+            for i = start to sorted.Count() - 1
+                rotated.Push(sorted[i])
+            end for
+            for i = 0 to start - 1
+                rotated.Push(sorted[i])
+            end for
+            orderedGroups.Push(rotated)
+        else
+            NxSwiftShuffle(list, rng)
+            orderedGroups.Push(list)
+        end if
     end for
     NxSwiftShuffle(orderedGroups, rng)
 
-    maxConsecutive = 2
     result = []
     positions = []
     for i = 0 to orderedGroups.Count() - 1
@@ -193,8 +402,13 @@ function NxInterleaveByShow(items as Object, seed as Integer, dayNumber as Integ
 
         group = orderedGroups[groupIndex]
         at = positions[groupIndex]
-        take = group.Count() - at
-        if take > maxConsecutive then take = maxConsecutive
+        take = 1
+        if classic and at + 1 < group.Count() then
+            a = group[at].ratingKey
+            if follows.DoesExist(a) then
+                if follows[a] = group[at + 1].ratingKey then take = 2
+            end if
+        end if
         for i = 0 to take - 1
             result.Push(group[at + i])
         end for
@@ -443,9 +657,10 @@ end function
 ' (NxSlotSeconds), whole, even past the day's end (#315). avoidKey (the title that just played here) is passed over while
 ' there is anything else, and a later part of a story never goes ahead of an
 ' earlier one waiting before it. With no occupancy, or nothing on elsewhere,
-' this is always 0: the channel's own order. Mirrors
-' DailyManifestScheduler.pickCandidate.
-function NxPickCandidate(queue as Object, t as Integer, occupancy as Dynamic, channelId as Integer, avoidKey as Dynamic, mustFit as Boolean, skipGated = false as Boolean) as Integer
+' this is always 0: the channel's own order. keepShowOrder (CLASSIC RERUNS) passes over an episode with an
+' earlier one of its show waiting before it; avoidShow (a show's identity) passes over that show's episodes.
+' Mirrors DailyManifestScheduler.pickCandidate.
+function NxPickCandidate(queue as Object, t as Integer, occupancy as Dynamic, channelId as Integer, avoidKey as Dynamic, mustFit as Boolean, skipGated = false as Boolean, keepShowOrder = false as Boolean, avoidShow = invalid as Dynamic) as Integer
     n = queue.Count()
     if n > NxLookahead() then n = NxLookahead()
     best = -1
@@ -458,6 +673,26 @@ function NxPickCandidate(queue as Object, t as Integer, occupancy as Dynamic, ch
         end if
         if not skip and i > 0 then
             if NxWaitsForEarlierPart(queue, i) then skip = true
+        end if
+        ' CLASSIC RERUNS (I-103): an episode never goes ahead of an earlier one of its show waiting before it.
+        if not skip and keepShowOrder and i > 0 then
+            if item.type = "episode" then
+                show = NxShowIdentity(item)
+                for k = 0 to i - 1
+                    if queue[k].type = "episode" then
+                        if NxSameIdentity(NxShowIdentity(queue[k]), show) then
+                            skip = true
+                            exit for
+                        end if
+                    end if
+                end for
+            end if
+        end if
+        ' The show that just had its turn is passed over; the caller asks again without it when nothing else fits.
+        if not skip and avoidShow <> invalid then
+            if item.type = "episode" then
+                if NxSameIdentity(NxShowIdentity(item), avoidShow) then skip = true
+            end if
         end if
         if not skip then
             ov = 0
@@ -476,6 +711,45 @@ function NxPickCandidate(queue as Object, t as Integer, occupancy as Dynamic, ch
     return 0
 end function
 
+' What follows what in `pool` (NxSeriesNext), made once for a pool: `holder`, when given, is the pool's memo
+' (NxPoolPrepare's), which lives as long as the pool does.
+function NxFollowsOf(pool as Object, holder as Dynamic) as Object
+    if holder <> invalid then
+        if holder.follows <> invalid then return holder.follows
+    end if
+    follows = NxSeriesNext(pool)
+    if holder <> invalid then holder.follows = follows
+    return follows
+end function
+
+' What airs next from `queue` (EPISODE ORDER, I-103). Under CLASSIC RERUNS the second of a pair airs straight after
+' the first, wherever a programme picked ahead of the pair left it in the queue and whatever another channel has
+' on; and once a show has had its turn, another title goes next while one is waiting that fits. `pick` holds the
+' day so far ({ blocks, byKey, classic, occupancy, channelId, gated }). Mirrors packDay's pickNext.
+function NxPickNext(pick as Object, queue as Object, pairs as Object, t as Integer, avoidKey as Dynamic, mustFit as Boolean) as Integer
+    last = invalid
+    lastKey = ""
+    if pick.blocks.Count() > 0 then
+        lastKey = pick.blocks.Peek().ratingKey
+        last = pick.byKey[lastKey]
+    end if
+    if pick.classic and last <> invalid then
+        if pairs.DoesExist(lastKey) then
+            second = pairs[lastKey]
+            n = queue.Count()
+            if n > NxLookahead() then n = NxLookahead()
+            for j = 0 to n - 1
+                if queue[j].ratingKey = second then return j
+            end for
+        end if
+        if last.type = "episode" then
+            other = NxPickCandidate(queue, t, pick.occupancy, pick.channelId, avoidKey, true, pick.gated, true, NxShowIdentity(last))
+            if other >= 0 then return other
+        end if
+    end if
+    return NxPickCandidate(queue, t, pick.occupancy, pick.channelId, avoidKey, mustFit, pick.gated, pick.classic, invalid)
+end function
+
 ' ── One day's schedule ──────────────────────────────────────────────────────
 
 ' Returns [{ ratingKey, startSec, endSec }] covering dayStartSec to dayEndSec.
@@ -488,7 +762,7 @@ end function
 ' every pick is the first, as before. gated: a channel whose pool changes with
 ' the hour packs with the others' days in view but not other gated ones'.
 ' Mirrors DailyManifestScheduler.packDay.
-function NxPackDay(pool as Object, dayStartSec as Integer, dayEndSec as Integer, dayNumber as Integer, channelId as Integer, yesterdayAired as Object, isPremiereChannel as Boolean, yesterdayLastRatingKey as Dynamic, occupancy = invalid as Dynamic, gated = false as Boolean, runsOverUntil = invalid as Dynamic) as Object
+function NxPackDay(pool as Object, dayStartSec as Integer, dayEndSec as Integer, dayNumber as Integer, channelId as Integer, yesterdayAired as Object, isPremiereChannel as Boolean, yesterdayLastRatingKey as Dynamic, occupancy = invalid as Dynamic, gated = false as Boolean, runsOverUntil = invalid as Dynamic, followsHolder = invalid as Dynamic) as Object
     totalPoolSec = 0&
     for each item in pool
         totalPoolSec = totalPoolSec + NxDuration(item) * 60
@@ -501,7 +775,12 @@ function NxPackDay(pool as Object, dayStartSec as Integer, dayEndSec as Integer,
     end for
     ' Interleave, then premieres to prime time, then reunite multi-part stories,
     ' in that order, so a just-added Part 1 drags its Part 2 with it.
-    ordered = NxInterleaveByShow(unplayed, channelId, dayNumber)
+    ' EPISODE ORDER (I-103), read once so one day is one order.
+    order = NxEpisodeOrder()
+    classic = order = "classic"
+    follows = {}
+    if classic then follows = NxFollowsOf(pool, followsHolder)
+    ordered = NxInterleaveByShow(unplayed, channelId, dayNumber, order, follows)
     if isPremiereChannel then ordered = NxPromoteRecentlyAdded(ordered, dayStartSec, channelId)
     ordered = NxGroupSequelParts(ordered)
 
@@ -510,7 +789,15 @@ function NxPackDay(pool as Object, dayStartSec as Integer, dayEndSec as Integer,
         if ordered[0].ratingKey = yesterdayLastRatingKey then ordered.Push(ordered.Shift())
     end if
 
+    primaryPairs = {}
+    if classic then primaryPairs = NxPairsIn(ordered, follows)
+    byKey = {}
+    byKey.SetModeCaseSensitive()
+    for each it in pool
+        byKey[it.ratingKey] = it
+    end for
     blocks = []
+    pick = { blocks: blocks, byKey: byKey, classic: classic, occupancy: occupancy, channelId: channelId, gated: gated }
     ' The day starts when the programme running over midnight from yesterday
     ' ends: it plays to its own end (#315), so nothing of today's may be on air
     ' under it. invalid, or before midnight, is the start of the day.
@@ -528,7 +815,7 @@ function NxPackDay(pool as Object, dayStartSec as Integer, dayEndSec as Integer,
         if NxDuration(item) > 0 then queue.Push(item)
     end for
     while queue.Count() > 0 and t < dayEndSec
-        j = NxPickCandidate(queue, t, occupancy, channelId, invalid, true, gated)
+        j = NxPickNext(pick, queue, primaryPairs, t, invalid, true)
         if j < 0 then exit while
         item = queue[j]
         queue.Delete(j)
@@ -539,7 +826,7 @@ function NxPackDay(pool as Object, dayStartSec as Integer, dayEndSec as Integer,
 
     if t < dayEndSec then
         ' Filler loop: sequels only, no premiere promotion, as on tvOS.
-        orderedFull = NxGroupSequelParts(NxInterleaveByShow(pool, channelId, dayNumber + 1))
+        orderedFull = NxGroupSequelParts(NxInterleaveByShow(pool, channelId, dayNumber + 1, order, follows))
         ' Math.floor, exactly: Int() would round a pool past 2^24 seconds to float32.
         goldenShift = NxFloorDouble(totalPoolSec * 0.6180339887#)
         day& = dayNumber
@@ -579,10 +866,12 @@ function NxPackDay(pool as Object, dayStartSec as Integer, dayEndSec as Integer,
         for i = 0 to cycleIndex - 1
             if NxDuration(orderedFull[i]) > 0 then cycle.Push(orderedFull[i])
         end for
+        loopPairs = {}
+        if classic then loopPairs = NxPairsIn(cycle, follows)
         while t < dayEndSec and cycle.Count() > 0
             lastKey = yesterdayLastRatingKey
             if blocks.Count() > 0 then lastKey = blocks.Peek().ratingKey
-            j = NxPickCandidate(cycle, t, occupancy, channelId, lastKey, false, gated)
+            j = NxPickNext(pick, cycle, loopPairs, t, lastKey, false)
             item = cycle[j]
             playSec = NxSlotSeconds(item)
             cycle.Delete(j)

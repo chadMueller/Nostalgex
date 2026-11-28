@@ -64,6 +64,7 @@
   <script type="text/brightscript" uri="pkg:/source/guide/DeepLink.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/RetroMode.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/Watershed.brs" />
+  <script type="text/brightscript" uri="pkg:/source/guide/EpisodeOrder.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/GuideText.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/GuideTimeout.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/GuideTimeCursor.brs" />

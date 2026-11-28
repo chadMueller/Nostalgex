@@ -3,6 +3,25 @@
 Why things changed, and what state they were left in. Newest first.
 Commits carry the detail of *what*; this carries the *why*.
 
+## 2026-11-27 (Roku 1.0.14: EPISODE ORDER, I-103, the port of web 1.0.24 and Apple TV 1.0.34)
+
+**State.** Branch `roku/1.0.14`. It passes only with web 1.0.24's `scripts/` beside it (`web/1.0.24-next`, 155a1a6d): the vector generator checks the engine's own answers. Merge the two together; either alone turns the `roku` CI job red.
+
+**Why.** CLASSIC RERUNS now airs two consecutive episodes of a show, from a random spot in the series, and SHUFFLE one at a time (Chad, 2026-11-19). The Apple TV, the web tuner and the shared goldens moved; Roku had the old pairs, so `roku/tests/run.sh` stopped at the first check (`gen-vectors.mjs`: "upstream JS disagrees with Swift at INTER:1:20000") against the web branch's engine.
+
+**Changed.**
+- `source/schedule/DailyManifest.brs`: the engine's `seriesNumber`, `showIdentity` (the server's show id, else title and year), `withoutSecondCopies`, `inSeriesOrder`, `seriesNext`, `pairsIn`; `NxInterleaveByShow(items, seed, day, order, follows)` for both orders (the start spot is one `NxRngBounded` draw, a title alone in its group draws none); `NxPickCandidate` takes `keepShowOrder` and `avoidShow`; `NxPackDay` reads the order once per day and asks `NxPickNext` (the second of a pair straight after the first, wherever another channel's programme left it; then another show while one fits). The series order is sorted on a text key that is never the same for two episodes, so it does not rely on a stable sort.
+- `source/guide/EpisodeOrder.brs` (new): the saved choice (the player section's `episodeOrder`, nothing saved for classic), the Apple TV's words (CLASSIC RERUNS, SHUFFLE and the two sentences), the pool fingerprint's suffix (`|order=shuffle`, nothing for classic). An item the loaders made has `seasonNumber` and `episodeNumber`, not a `seTag`; `NxEpisodeTag` makes the tag the web loader would (S01E04, E04, S02).
+- What a change of order has to move: the pool fingerprint (so the session's day cache packs again; the memo keeps the fingerprint without the suffix, so no pool is read again), the re-check key (`NxScheduleHourKey` with the order, so closing Settings reschedules), `guide.episodeOrder` (a saved guide is shown only under the order it was packed under), and the saved guide's key always names the order, so a guide saved by 1.0.13, whose pairs were any two episodes, is not shown at the first launch; the saved pools, scheduled now, are.
+- Settings, CHANNELS & BUNDLES: an EPISODE ORDER row before WATERSHED, OK cycles, as the Apple TV's.
+- `tests/gen-vectors.mjs`: the Swift order strings of fixture A rewritten from the engine's smoke file (as the engine's own header says they were on 2026-11-19), a fixture C (show ids, every tag form, remakes with one title, a show held twice, films) with the engine's answers under both orders, `episode-order-golden.json` copied like the other goldens.
+
+**Tests.** Each part alone, one interpreter at a time: `episode-order` (new, 87 cases: tags, identity, series order, second copies, what follows what, the day's order under both orders, the two pick rules, whole days, the saved choice through a fake registry, the keys), `episode-order-golden` (new: scripts/episode-order-golden.json, the Apple TV's SHUFFLE answers for a Plex lineup, 135 checks), `schedule-parity` (the Apple TV's CLASSIC RERUNS answers for Plex, Jellyfin and Emby lineups, with the pairs under pressure, 480 checks), schedule, schedule-dst, cross-channel, lineup, version, settings-rail, settings-channels and enrichment. The static guard scripts (guards, includes, uninit, testlists, dupkeys, observers) pass. All 0 failed.
+
+**On the stick** (Streaming Stick Plus, OS 16.0.4, a sideloaded build in its own data space, a stand-in Plex of 60 films and 150 shows of 24 episodes, enrichment off). EPISODE ORDER sits before WATERSHED in CHANNELS & BUNDLES with the Apple TV's words (`.shots/roku-1014-ready-2026-11-27/09-channels-page.jpg`); OK moved it to SHUFFLE, closing Settings rescheduled 13 channels in 1.6 s, and the sitcom channel went from pairs of one show to the other order. Scheduling the first full build took 2.1 s; the same library on the 1.0.14 head without the port took 1.4 s (5.4 s before two changes: item numbers read straight from `seasonNumber` and `episodeNumber` with no text or pattern, and one `follows` map per pool, kept in the pool's memo).
+
+**Half-done.** The full `run.sh` is not run on this head. Launch time with a big library of shows is measured only at 3,660 titles (+0.7 s to schedule); the cost grows with the episodes a pool holds, about 0.2 ms a title. The Jellyfin and Emby loaders' episodes were not read on a stick; their `seasonNumber`, `episodeNumber` and `showKey` are what the goldens' fixtures go through.
+
 ## 2026-11-27 (Roku 1.0.14: the enrichment upsert leaves out a value nobody has, as the Apple TV's N-093 fix)
 
 **State.** Branch `roku/1.0.14`. Not on a stick; tests below.

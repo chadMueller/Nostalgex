@@ -19,8 +19,8 @@ end function
 
 ' watershed: the switch the guide is (or would be) scheduled with
 ' (NxGuideKeyRest).
-function NxGuideCacheKey(nowSec as LongInteger, bundles as Object, watershed as Boolean) as String
-    return NxSavedKey(NxBuildKey(), NxGuideKeyRest(NxLocalDay(nowSec).dayKey, bundles, NxChoicesKey(), watershed))
+function NxGuideCacheKey(nowSec as LongInteger, bundles as Object, watershed as Boolean, order = "classic" as String) as String
+    return NxSavedKey(NxBuildKey(), NxGuideKeyRest(NxLocalDay(nowSec).dayKey, bundles, NxChoicesKey(), watershed, order))
 end function
 
 ' Which build this is, for the cache keys: the app version and the hash of
@@ -257,7 +257,7 @@ function NxGuideFromSavedPools(nowSec as LongInteger, bundles as Object) as Dyna
     channels = NxScheduleGuide(ordered, nowSec, true)
     print "library: saved pools scheduled for today in "; timer.TotalMilliseconds(); " ms"
     guide = {
-        channels: channels, builtAt: nowSec, watershed: NxWatershedSet(), items: saved.libraryItems,
+        channels: channels, builtAt: nowSec, watershed: NxWatershedSet(), episodeOrder: NxEpisodeOrder(), items: saved.libraryItems,
         bundles: saved.bundles, enabledBundles: bundles, franchises: saved.franchises,
         collections: saved.collections, poolsFingerprint: NxToStr(saved.fingerprint)
     }
@@ -294,7 +294,7 @@ sub loadLibrary()
         if raw <> "" then
             saved = ParseJson(raw)
             if type(saved) = "roAssociativeArray" then
-                guideKey = NxGuideCacheKey(clock0.nowSec, NxEnabledBundles(), NxWatershedOn())
+                guideKey = NxGuideCacheKey(clock0.nowSec, NxEnabledBundles(), NxWatershedOn(), NxSyncEpisodeOrder())
                 if NxSavedKeyShowable(saved.key, guideKey) and type(saved.guide) = "roAssociativeArray" then
                     m.savedGuideKey = saved.key
                     ' Another build scheduled it, so its schedules don't
@@ -328,6 +328,7 @@ sub loadLibrary()
                 setLineup(fromPools.ordered)
                 fromPools.guide.channels = NxScheduleGuide(fromPools.ordered, clock0.nowSec)
                 fromPools.guide.watershed = NxWatershedSet()
+                fromPools.guide.episodeOrder = NxEpisodeOrder()
                 m.top.guide = fromPools.guide
                 m.shownGuide = fromPools.guide
                 m.top.status = "ready"
@@ -876,12 +877,15 @@ function buildGuide(items as Object, config as Object, manifest as Object, colle
     old = m.shownGuide
     sameSchedule = false
     NxSetWatershed(NxWatershedOn())
+    NxSyncEpisodeOrder()
     builtAt& = nowSec&
     if shown and old <> invalid and not m.shownOtherBuild then
         if NxToStr(old.poolsFingerprint) = fingerprint and type(old.channels) = "roArray" and NxIsNumber(old.builtAt) then
             oldAt& = old.builtAt
             ' Scheduled with the WATERSHED switch as it is now, too.
             sameSchedule = NxLocalDay(oldAt&).dayKey = NxLocalDay(nowSec&).dayKey and (old.watershed = true) = NxWatershedSet()
+            ' And with the EPISODE ORDER as it is now: a day packed under the other order is packed again.
+            if sameSchedule and NxGuideEpisodeOrder(old) <> NxEpisodeOrder() then sameSchedule = false
         end if
     end if
     builtWatershed = NxWatershedSet()
@@ -914,7 +918,7 @@ function buildGuide(items as Object, config as Object, manifest as Object, colle
     jumps = []
     if customCollectionIDs.Count() > 0 then jumps.Push({ name: "OTHER COLLECTIONS", ids: customCollectionIDs })
     guide = {
-        channels: out, builtAt: builtAt&, watershed: builtWatershed, poolsFingerprint: fingerprint, items: items.Count(), bundles: bundleList, enabledBundles: bundles, jumps: jumps,
+        channels: out, builtAt: builtAt&, watershed: builtWatershed, episodeOrder: NxEpisodeOrder(), poolsFingerprint: fingerprint, items: items.Count(), bundles: bundleList, enabledBundles: bundles, jumps: jumps,
         franchises: franchiseRows, franchiseOverCap: franchiseOverCap, franchiseCapacity: NxFranchiseCapacity(),
         collections: { rows: cl.rows, overCap: cl.overCap, overCapFranchises: cl.overCapFranchises, overCapCustom: cl.overCapCustom,
             capacityFranchises: NxCollectionFranchiseCapacity(), capacityCustom: NxCollectionsCapacity(), scanned: collections.raw.Count(), failed: collections.failed }
@@ -954,7 +958,7 @@ function buildGuide(items as Object, config as Object, manifest as Object, colle
     ' never reused from the file). cachefs: can lose a file, so it must be there.
     fs = CreateObject("roFileSystem")
     timer.Mark()
-    guideKey = NxGuideCacheKey(nowSec&, bundles, guide.watershed = true)
+    guideKey = NxGuideCacheKey(nowSec&, bundles, guide.watershed = true, NxGuideEpisodeOrder(guide))
     if matched and sameSchedule and m.savedGuideKey = guideKey and fs.Exists(NxGuideCachePath()) then
         print "library: the saved guide is this one; not saved again"
     else
@@ -1051,11 +1055,12 @@ sub keepScheduling(ordered as Object, guide as Object, builtChannels as Object, 
             end if
         else if type(msg) = "roSGNodeEvent" and hourKeyNow() <> lastHour then
             nowSec& = CreateObject("roDateTime").AsSeconds()
-            lastHour = NxScheduleHourKey(nowSec&, NxWatershedSet())
+            lastHour = NxScheduleHourKey(nowSec&, NxWatershedSet(), NxEpisodeOrder())
             t = CreateObject("roTimespan")
             setLineup(ordered)
             channels = NxScheduleGuide(ordered, nowSec&)
             guide.watershed = NxWatershedSet()
+            guide.episodeOrder = NxEpisodeOrder()
             ' What the re-check costs: about 120 channels took a core for 9 to 10 s.
             print "library: rescheduled "; channels.Count(); " channels in "; t.TotalMilliseconds(); " ms; memory "; NxMemoryLine()
             now = FormatJson(channels)
@@ -1079,19 +1084,20 @@ end sub
 ' registry, so every schedule is built with the switch as it is now.
 sub setLineup(ordered as Object)
     NxSetWatershed(NxWatershedOn())
+    NxSyncEpisodeOrder()
     NxSetLineup(ordered)
 end sub
 
 ' The re-check's key for a guide: its hour and the switch it was built with.
 function guideHourKey(guide as Object) as String
-    return NxScheduleHourKey(guide.builtAt, guide.watershed = true)
+    return NxScheduleHourKey(guide.builtAt, guide.watershed = true, NxGuideEpisodeOrder(guide))
 end function
 
-' The key now, with the switch read afresh: a switch in Settings reschedules
+' The key now, with the switch and the EPISODE ORDER read afresh: a change in Settings reschedules
 ' on the next re-check, as a new hour does.
 function hourKeyNow() as String
     NxSetWatershed(NxWatershedOn())
-    return NxScheduleHourKey(CreateObject("roDateTime").AsSeconds(), NxWatershedSet())
+    return NxScheduleHourKey(CreateObject("roDateTime").AsSeconds(), NxWatershedSet(), NxSyncEpisodeOrder())
 end function
 
 ' The coverage count for Settings' library line (#207,
@@ -1216,7 +1222,7 @@ sub keepSavedGuide()
             m.top.bundleBuilt = "rebuild"
         else if type(msg) = "roSGNodeEvent" and hourKeyNow() <> lastHour then
             nowSec& = CreateObject("roDateTime").AsSeconds()
-            lastHour = NxScheduleHourKey(nowSec&, NxWatershedSet())
+            lastHour = NxScheduleHourKey(nowSec&, NxWatershedSet(), NxEpisodeOrder())
             if ordered = invalid then
                 clock = NxFilterClock(nowSec&)
                 fromPools = NxGuideFromSavedPools(nowSec&, guide.enabledBundles)
@@ -1231,6 +1237,7 @@ sub keepSavedGuide()
                 setLineup(ordered)
                 guide.channels = NxScheduleGuide(ordered, nowSec&)
                 guide.watershed = NxWatershedSet()
+                guide.episodeOrder = NxEpisodeOrder()
                 m.top.guide = guide
                 m.top.status = "ready"
                 print "library: saved guide rescheduled from the saved pools (new day or time restriction)"

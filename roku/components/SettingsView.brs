@@ -313,8 +313,9 @@ sub buildRows()
     add({ kind: "info", text: "Radar from NOAA (US), Environment Canada and the German Weather Service." }, "channels")
 
     m.addPage = ""
-    ' WATERSHED (#190) ends the CHANNELS & BUNDLES list, after the three links,
-    ' as on the Apple TV.
+    ' EPISODE ORDER (I-103) and WATERSHED (#190) end the CHANNELS & BUNDLES list, after the three links,
+    ' in the Apple TV's order.
+    add({ kind: "episodeOrder" })
     add({ kind: "watershed" })
 
     add({ kind: "subheader", text: "SERVERS" }, "servers")
@@ -1118,6 +1119,13 @@ sub drawRow(page as Object, i as Integer, row as Object, y as Float)
             state = "ON"
             stateColor = m.accent + "FF"
         end if
+    else if row.kind = "episodeOrder" then
+        ' The Apple TV's EPISODE ORDER (I-103): CLASSIC RERUNS or SHUFFLE; OK moves to the next.
+        label = "EPISODE ORDER"
+        detail = NxEpisodeOrderExplanation(NxEpisodeOrder())
+        state = NxEpisodeOrderTitle(NxEpisodeOrder())
+        stateColor = m.t2
+        if NxEpisodeOrder() <> "classic" then stateColor = m.accent + "FF"
     else if row.kind = "watershed" then
         label = "WATERSHED"
         detail = "18 and R-rated titles wait until 9 PM"
@@ -1518,6 +1526,11 @@ sub pressRow()
         ' cold-start seed's channel (LibraryTask.followSeed).
         NxSaveLastChannelOn(NxLastChannelRegistry(), not NxLastChannelOn(NxLastChannelRegistry()))
         print "settings: open on last channel "; NxLastChannelOn(NxLastChannelRegistry())
+        render()
+    else if row.kind = "episodeOrder" then
+        ' The library task reads it on its next re-check, which closing Settings asks for at once.
+        NxSaveEpisodeOrder(NxEpisodeOrderNext(NxEpisodeOrder()))
+        print "settings: episode order "; NxEpisodeOrder()
         render()
     else if row.kind = "watershed" then
         ' The library task reads it on its next re-check, which closing

@@ -28,8 +28,12 @@ end function
 ' switch the other way is not shown at launch: on, it would air them before
 ' 9 PM until the full build replaced it (#211). Off adds nothing, so a guide
 ' saved before the switch existed, which is off, still shows.
-function NxGuideKeyRest(dayKey as String, bundles as Object, choices as String, watershed as Boolean) as String
-    rest = dayKey + "|" + FormatJson(bundles) + "|" + choices
+'
+' And the EPISODE ORDER (I-103) the schedules were packed under, always, so a guide saved before the setting
+' existed, whose pairs were any two episodes, is not shown at the first launch of this build: the saved pools,
+' scheduled now, are, and a guide saved under the other order is not shown either.
+function NxGuideKeyRest(dayKey as String, bundles as Object, choices as String, watershed as Boolean, order = "classic" as String) as String
+    rest = dayKey + "|" + FormatJson(bundles) + "|" + choices + "|order=" + order
     if watershed then rest = rest + "|watershed"
     return rest
 end function

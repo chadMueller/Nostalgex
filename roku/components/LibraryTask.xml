@@ -91,6 +91,7 @@
   <script type="text/brightscript" uri="pkg:/source/mediabrowser/ServerKind.brs" />
   <script type="text/brightscript" uri="pkg:/source/filter/ChannelFilter.brs" />
   <script type="text/brightscript" uri="pkg:/source/schedule/DailyManifest.brs" />
+  <script type="text/brightscript" uri="pkg:/source/guide/EpisodeOrder.brs" />
   <script type="text/brightscript" uri="pkg:/source/schedule/LocalTime.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/Lineup.brs" />
   <script type="text/brightscript" uri="pkg:/source/guide/SeasonalPrompt.brs" />

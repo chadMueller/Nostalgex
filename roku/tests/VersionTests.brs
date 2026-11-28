@@ -58,14 +58,14 @@ function NxRunVersionTests() as Integer
     NxCheck(r, "release: cache root for none", NxCacheRootFor("cachefs:", ""), "cachefs:")
 
     ' The saved guide's and pools' keys (#115).
-    cur = NxSavedKey("1.0.7+bbbb", "20261028|[""nostalgex""]|[]")
-    NxCheck(r, "saved key: build, format, the rest", cur, "1.0.7+bbbb|" + NxSavedFormat() + "|20261028|[""nostalgex""]|[]")
+    cur = NxSavedKey("1.0.7+bbbb", "20261028|[""nostalgex""]|[]|order=classic")
+    NxCheck(r, "saved key: build, format, the rest", cur, "1.0.7+bbbb|" + NxSavedFormat() + "|20261028|[""nostalgex""]|[]|order=classic")
     NxCheck(r, "saved key: same build shows", FormatJson(NxSavedKeyShowable(cur, cur)), "true")
-    NxCheck(r, "saved key: another build shows", FormatJson(NxSavedKeyShowable(NxSavedKey("1.0.6+aaaa", "20261028|[""nostalgex""]|[]"), cur)), "true")
-    NxCheck(r, "saved key: another day doesn't", FormatJson(NxSavedKeyShowable(NxSavedKey("1.0.7+bbbb", "20261027|[""nostalgex""]|[]"), cur)), "false")
-    NxCheck(r, "saved key: other packages don't", FormatJson(NxSavedKeyShowable(NxSavedKey("1.0.6+aaaa", "20261028|[""nostalgex"",""horror""]|[]"), cur)), "false")
-    NxCheck(r, "saved key: saved before the format doesn't", FormatJson(NxSavedKeyShowable("1.0.6+aaaa|20261028|[""nostalgex""]|[]", cur)), "false")
-    NxCheck(r, "saved key: another format doesn't", FormatJson(NxSavedKeyShowable("1.0.6+aaaa|g0|20261028|[""nostalgex""]|[]", cur)), "false")
+    NxCheck(r, "saved key: another build shows", FormatJson(NxSavedKeyShowable(NxSavedKey("1.0.6+aaaa", "20261028|[""nostalgex""]|[]|order=classic"), cur)), "true")
+    NxCheck(r, "saved key: another day doesn't", FormatJson(NxSavedKeyShowable(NxSavedKey("1.0.7+bbbb", "20261027|[""nostalgex""]|[]|order=classic"), cur)), "false")
+    NxCheck(r, "saved key: other packages don't", FormatJson(NxSavedKeyShowable(NxSavedKey("1.0.6+aaaa", "20261028|[""nostalgex"",""horror""]|[]|order=classic"), cur)), "false")
+    NxCheck(r, "saved key: saved before the format doesn't", FormatJson(NxSavedKeyShowable("1.0.6+aaaa|20261028|[""nostalgex""]|[]|order=classic", cur)), "false")
+    NxCheck(r, "saved key: another format doesn't", FormatJson(NxSavedKeyShowable("1.0.6+aaaa|g0|20261028|[""nostalgex""]|[]|order=classic", cur)), "false")
     NxCheck(r, "saved key: its own format, not the library's", NxSavedFormat(), "g1")
     day = "20261028"
     off = NxSavedKey("1.0.7+bbbb", NxGuideKeyRest(day, ["nostalgex"], "[]", false))

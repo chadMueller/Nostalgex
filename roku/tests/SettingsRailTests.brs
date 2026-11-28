@@ -38,6 +38,7 @@ function NxRunSettingsRailTests() as Integer
     NxCheck(r, "tab of: an ABOUT link line", NxSettingsTabOf("aboutLink"), "about")
     NxCheck(r, "tab of: the old GITHUB kind is gone, it is one of the links", NxSettingsTabOf("github"), "")
     NxCheck(r, "tab of: WATERSHED (#211's row) is a CHANNELS row", NxSettingsTabOf("watershed"), "channels")
+    NxCheck(r, "tab of: EPISODE ORDER (I-103) is a CHANNELS row", NxSettingsTabOf("episodeOrder"), "channels")
     NxCheck(r, "tab of: a text row has none of its own", NxSettingsTabOf("header"), "")
     NxCheck(r, "tab of: an unknown kind", NxSettingsTabOf("nothing"), "")
 
@@ -107,10 +108,11 @@ function NxRunSettingsRailTests() as Integer
         { kind: "franchiseAll", inTab: "channels", inPage: "franchises" },
         { kind: "header", inTab: "channels", inPage: "collections" },
         { kind: "info", inTab: "channels", inPage: "collections" },
+        { kind: "episodeOrder", inTab: "channels", inPage: "" },
         { kind: "watershed", inTab: "channels", inPage: "" },
         { kind: "rescan", inTab: "servers", inPage: "" }
     ]
-    NxCheck(r, "pages: the list is the four links, then WATERSHED", NxRailRowKinds(NxSettingsRowsInTab(ch, "channels")), "channelsLink|channelsLink|channelsLink|channelsLink|watershed")
+    NxCheck(r, "pages: the list is the four links, then EPISODE ORDER and WATERSHED", NxRailRowKinds(NxSettingsRowsInTab(ch, "channels")), "channelsLink|channelsLink|channelsLink|channelsLink|episodeOrder|watershed")
     NxCheck(r, "pages: CHANNEL PACKAGES holds its section", NxRailRowKinds(NxSettingsRowsInTab(ch, "channels", "packages")), "header|bundle0")
     NxCheck(r, "pages: FRANCHISES holds its switch and ADD ALL", NxRailRowKinds(NxSettingsRowsInTab(ch, "channels", "franchises")), "header|bundle9|franchiseAll")
     NxCheck(r, "pages: a page opens on its first row", NxSettingsFirstFocusable(NxSettingsRowsInTab(ch, "channels", "packages")).ToStr(), "1")
