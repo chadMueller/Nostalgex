@@ -8,9 +8,9 @@ import XCTest
 /// what it does not know. So every request must hold rows with one set of keys.
 final class EnrichmentUpsertBodyTests: XCTestCase {
 
-    private func row(_ id: String, imdb: String? = nil, franchise: Int? = nil, rating: Double? = nil,
-                     votes: Int? = nil, rottenTomatoes: Int? = nil) -> MediaEnrichment {
-        MediaEnrichment(tmdbID: id, imdbID: imdb, mediaType: "movie", keywords: ["k"], networks: [],
+    private func row(_ id: String, type: String = "movie", imdb: String? = nil, franchise: Int? = nil,
+                     rating: Double? = nil, votes: Int? = nil, rottenTomatoes: Int? = nil) -> MediaEnrichment {
+        MediaEnrichment(tmdbID: id, imdbID: imdb, mediaType: type, keywords: ["k"], networks: [],
                         productionCompanies: [], tmdbGenres: ["Drama"], imdbRating: rating, imdbVotes: votes,
                         rottenTomatoesScore: rottenTomatoes, metacriticScore: nil, awards: nil,
                         franchiseID: franchise, franchiseName: franchise.map { "Collection \($0)" },
@@ -61,5 +61,16 @@ final class EnrichmentUpsertBodyTests: XCTestCase {
         let bodies = try SupabaseService.upsertBodies(for: many)
         XCTAssertEqual(try bodies.map { try rows(in: $0).count }, [200, 200, 50])
         XCTAssertTrue(try SupabaseService.upsertBodies(for: []).isEmpty)
+    }
+
+    /// TMDB numbers films and shows apart, so one number can be both. The table's key is the number and the
+    /// type, so a film and a show that share a number in one batch are two rows and both must go out.
+    func testAFilmAndAShowThatShareANumberBothGoOut() throws {
+        let batch = [row("603"), row("603", type: "tv"), row("604")]
+        let bodies = try SupabaseService.upsertBodies(for: batch)
+        let sent = try bodies.flatMap { try rows(in: $0) }.map {
+            "\(try XCTUnwrap($0["media_type"] as? String)):\(try XCTUnwrap($0["tmdb_id"] as? String))"
+        }
+        XCTAssertEqual(sent.sorted(), ["movie:603", "movie:604", "tv:603"], "the film and the show both go, once each")
     }
 }

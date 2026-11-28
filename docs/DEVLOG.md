@@ -9,7 +9,7 @@ Commits carry the detail of *what*; this carries the *why*.
 
 **In the build** (main plus the branch): Settings load status, the LOCAL WEATHER place search and radar fixes (#332), the library picker relaunch fix (#337), EPISODE ORDER with CLASSIC RERUNS now two consecutive episodes, the hourly live channel list check, tip jar signals, and the two enrichment fixes (mixed-key saves, a row keyed by type and number). No Pro or theme code, no PR #235, no contributor commits on the app delta since 1.0.33, no new launch hooks beyond the demo-mode UI test fixture. Bundled channels.json is version 50, as in 1.0.33.
 
-**Tested.** Full NostalgexTests once, serial, one simulator of its own: 1,536 tests, 35 skipped, 0 failures. Release build for generic tvOS compiles.
+**Tested.** Full NostalgexTests once, serial, one simulator of its own: 1,536 tests, 35 skipped, 0 failures (the count the run printed). Then one class after review: `EnrichmentUpsertBodyTests`, 3 tests, a film and a show sharing a number both go out. Release build for generic tvOS compiles.
 
 **Not done.** Not on a TV. The privacy page and PRIVACY_POLICY.md do not list the three tip events, and the App Store privacy label was not looked at for them.
 
@@ -21,7 +21,7 @@ Commits carry the detail of *what*; this carries the *why*.
 
 **Changed.** The in-memory cache, the "already cached" check and every lookup by a library item use `type:number` (`MediaEnrichment.cacheKey`, `PlexMediaItem.enrichmentKey`; an episode's type is `tv`). The work list is one entry per type and number. The three franchise lookups in `AppState+Franchises` use the same key. The table is still asked by number, each number once. Saves are unchanged: the row already carries `media_type`.
 
-**Disk cache.** The file format is unchanged (rows under a text key). On load each row is placed under its own type and number, so a file an older build wrote under the bare number loads as before. A file this build writes is keyed `type:number`; an older build reading it would find no row by bare number and fetch again from the shared table, nothing worse.
+**Disk cache.** The file format is unchanged (rows under a text key). On load each row is placed under its own type and number, so a file an older build wrote under the bare number loads as before. Going back is not safe: a file this build writes is keyed `type:number` (`movie:603`). 1.0.33 loads those rows into its in-memory cache under those keys, so the cache is not empty and `enrichmentPending` never fires, while every lookup by bare number misses. Pools are then built without networks, keywords or scores and the refill is skipped, which can repeat I-073 on the next rebuild. App Store viewers cannot go back a version; a TestFlight tester who installs an older build can. (Corrected 2026-11-27 after review; this paragraph first said an older build would just fetch again.)
 
 **Tests.** `EnrichmentKeyTests` (5, new): a film and a show that share a number each find their own row, in either arrival order; a show finds nothing when only the film is cached; a show is still on the fetch list when the table only has the film. `OMDBRelayTests` (17) and `EnrichmentCacheStoreTests` (5) follow the new key. One run of the three, 27 tests, 0 failures. No full suite.
 
