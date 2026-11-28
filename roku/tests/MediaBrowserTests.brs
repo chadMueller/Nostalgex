@@ -49,7 +49,12 @@ function NxRunMediaBrowserTests(vectorsPath as String, fixturePath as String) as
             label = "item " + i.ToStr() + " " + NxToStr(want.ratingKey)
             for each k in want
                 ' audioStreams is compared as audioTracks, below.
-                if LCase(k) <> "audiostreams" then NxCheck(r, label + " " + k, FormatJson(NxMbJsonValue(it[k])), FormatJson(NxMbJsonValue(want[k])))
+                ' The web's loader writes a seTag on an episode; the port keeps seasonNumber and episodeNumber and NxEpisodeTag makes the tag from them.
+                if LCase(k) = "setag" then
+                    NxCheck(r, label + " " + k, NxEpisodeTag(it), NxToStr(want[k]))
+                else if LCase(k) <> "audiostreams" then
+                    NxCheck(r, label + " " + k, FormatJson(NxMbJsonValue(it[k])), FormatJson(NxMbJsonValue(want[k])))
+                end if
             end for
             ' The web lists every audio track of the best source (index, lang,
             ' codec, channels, title). The port keeps them as audioTracks only
